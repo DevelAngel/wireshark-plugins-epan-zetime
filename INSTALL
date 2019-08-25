@@ -1,0 +1,10 @@
+Put the ZeTime epan plugin into the following wireshark directory:
+
+  wireshark/plugins/epan/zetime
+
+Compile the plugin with the following cmake commands:
+
+  cmake -S wireshark -B <BUILDDIR>
+        -DCUSTOM_PLUGIN_SRC_DIR="plugins/epan/zetime"
+  cmake --build <BUILDDIR> --target 'zetime.so'
+
