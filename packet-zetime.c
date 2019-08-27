@@ -21,6 +21,25 @@ static int proto_zetime = -1;
 static gint ett_zetime = -1;
 static int hf_zetime_pdu_type = -1;
 
+static const value_string vs_zetime_pdu_type_names[] = {
+    { 0x01, "Receipt" }, //< ???
+    { 0x02, "Serial Number" },
+    { 0x03, "0x03" }, //< ???
+    { 0x04, "Time Synchronization" },
+    { 0x0b, "0x0b" }, //< ???
+    { 0x0c, "0x0c" }, //< ???
+    { 0x18, "0x18" }, //< ???
+    { 0x52, "Information Availability" },
+    { 0x53, "0x53" }, //< ???
+    { 0x54, "Activity Report" },
+    { 0x5a, "0x5a" }, //< ???
+    { 0x61, "Heart Rate Frequency" },
+    { 0x98, "Calendar Month View" },
+    { 0x99, "Calendar Day View" },
+    { 0xe2, "0xe2" }, //< ???
+    { 0, NULL } //< end of array
+};
+
 static int
 dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
                                                         void *data _U_)
@@ -62,7 +81,7 @@ proto_register_zetime(void)
         { &hf_zetime_pdu_type,
             { "PDU Type", "zetime.pdu_type",
             FT_UINT8, BASE_DEC,
-            NULL, 0x0,
+            VALS(vs_zetime_pdu_type_names), 0x0,
             NULL, HFILL }
         },
     };
