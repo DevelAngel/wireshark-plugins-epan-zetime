@@ -66,8 +66,15 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
     /* pdu type (1 Byte) */
     {
         const gint len = 1;
-        proto_tree_add_item(zetime_tree, hf_zetime_pdu_type, tvb, offset, len,
-                            ENC_LITTLE_ENDIAN);
+        guint value = 0;
+        proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_pdu_type, tvb,
+                                     offset, len, ENC_LITTLE_ENDIAN, &value);
+        col_add_fstr(pinfo->cinfo, COL_INFO, "%s", val_to_str(value,
+                     vs_zetime_pdu_type_names,
+                     "UNKNOWN PDU TYPE (0x%02x)"));
+        proto_item_append_text(ti, ", %s", val_to_str(value,
+                               vs_zetime_pdu_type_names,
+                               "UNKNOWN PDU TYPE (0x%02x)"));
         offset += len;
     }
 
