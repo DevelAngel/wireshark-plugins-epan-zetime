@@ -18,6 +18,8 @@
 #define ZETIME_PORT 7000 /* Not IANA registed */
 
 static int proto_zetime = -1;
+static gint ett_zetime = -1;
+static int hf_zetime_pdu_type = -1;
 
 static int
 dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
@@ -26,17 +28,58 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "ZeTime");
     col_clear(pinfo->cinfo, COL_INFO);
 
+    /* General message composition
+     *
+     * +----------+----------+----------+----------------+----------+-------+
+     * | PREAMBLE | PDU TYPE | MSG TYPE | payload length | payload  |  END  |
+     * |  1 Byte  |  1 Byte  |  1 Byte  |    2 Bytes     |  X Byte  |  1 B  |
+     * |  fixed   |   enum   |   enum   |    number      | variable | fixed |
+     * +----------+----------+----------+----------------+----------+-------+
+     *
+     */
+
+    proto_item *ti = proto_tree_add_item(tree, proto_zetime, tvb, 0, -1,
+                                         ENC_NA);
+    proto_tree *zetime_tree = proto_item_add_subtree(ti, ett_zetime);
+
+    gint offset = 0;
+
+    /* pdu type (1 Byte) */
+    {
+        const gint len = 1;
+        proto_tree_add_item(zetime_tree, hf_zetime_pdu_type, tvb, offset, len,
+                            ENC_LITTLE_ENDIAN);
+        offset += len;
+    }
+
     return tvb_captured_length(tvb);
 }
 
 void
 proto_register_zetime(void)
 {
+    static hf_register_info hf[] = {
+        { &hf_zetime_pdu_type,
+            { "PDU Type", "zetime.pdu_type",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+    };
+
+    /* Setup protocol subtree array */
+    static gint *ett[] = {
+        &ett_zetime
+    };
+
     proto_zetime = proto_register_protocol (
         "ZeTime Protocol", /* name */
         "ZeTime",          /* short name */
         "zetime"           /* abbrev */
     );
+
+    proto_register_field_array(proto_zetime, hf, array_length(hf));
+    proto_register_subtree_array(ett, array_length(ett));
 }
 
 void
