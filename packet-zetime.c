@@ -19,6 +19,7 @@
 
 static int proto_zetime = -1;
 static gint ett_zetime = -1;
+static int hf_zetime_preamble = -1;
 static int hf_zetime_pdu_type = -1;
 
 static const value_string vs_zetime_pdu_type_names[] = {
@@ -63,6 +64,14 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
 
     gint offset = 0;
 
+    /* preamble (1 Byte) */
+    {
+        const gint len = 1;
+        proto_tree_add_item(zetime_tree, hf_zetime_preamble, tvb, offset, len,
+                            ENC_NA);
+        offset += len;
+    }
+
     /* pdu type (1 Byte) */
     {
         const gint len = 1;
@@ -85,6 +94,12 @@ void
 proto_register_zetime(void)
 {
     static hf_register_info hf[] = {
+        { &hf_zetime_preamble,
+            { "PREAMBLE", "zetime.preamble",
+            FT_NONE, BASE_NONE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
         { &hf_zetime_pdu_type,
             { "PDU Type", "zetime.pdu_type",
             FT_UINT8, BASE_DEC,
