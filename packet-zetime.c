@@ -22,6 +22,7 @@ static gint ett_zetime = -1;
 static int hf_zetime_preamble = -1;
 static int hf_zetime_pdu_type = -1;
 static int hf_zetime_msg_type = -1;
+static int hf_zetime_payload_length = -1;
 
 static const value_string vs_zetime_pdu_type_names[] = {
     { 0x01, "Receipt" }, //< ???
@@ -108,6 +109,14 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         offset += len;
     }
 
+    /* payload length (2 Byte) */
+    {
+        const gint len = 2;
+        proto_tree_add_item(zetime_tree, hf_zetime_payload_length, tvb, offset,
+                            len, ENC_LITTLE_ENDIAN);
+        offset += len;
+    }
+
     return tvb_captured_length(tvb);
 }
 
@@ -131,6 +140,12 @@ proto_register_zetime(void)
             { "MSG Type", "zetime.msg_type",
             FT_UINT8, BASE_HEX,
             VALS(vs_zetime_msg_type_names), 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_payload_length,
+            { "Payload Length", "zetime.payload_length",
+            FT_UINT16, BASE_DEC_HEX,
+            NULL, 0x0,
             NULL, HFILL }
         },
     };
