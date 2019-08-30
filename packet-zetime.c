@@ -53,6 +53,75 @@ static const value_string vs_zetime_msg_type_names[] = {
     { 0, NULL } //< end of array
 };
 
+static gint dissect_preamble(tvbuff_t *tvb, gint offset,
+                             proto_tree *zetime_tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(zetime_tree, hf_zetime_preamble, tvb, offset, len,
+                        ENC_NA);
+    return len;
+}
+
+static gint dissect_end(tvbuff_t *tvb, gint offset,
+                        proto_tree *zetime_tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(zetime_tree, hf_zetime_end, tvb, offset, len,
+                        ENC_NA);
+    return len;
+}
+
+static gint dissect_pdu_type(tvbuff_t *tvb, gint offset,
+                             proto_tree *zetime_tree, proto_item *ti,
+                             packet_info *pinfo)
+{
+    const gint len = 1;
+    guint value = 0;
+    proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_pdu_type, tvb,
+                                 offset, len, ENC_LITTLE_ENDIAN, &value);
+    proto_item_append_text(ti, ", %s", val_to_str(value,
+                           vs_zetime_pdu_type_names,
+                           "UNKNOWN PDU TYPE (0x%02x)"));
+    col_add_fstr(pinfo->cinfo, COL_INFO, "%s", val_to_str(value,
+                 vs_zetime_pdu_type_names,
+                 "UNKNOWN PDU TYPE (0x%02x)"));
+    return len;
+}
+
+static gint dissect_msg_type(tvbuff_t *tvb, gint offset,
+                             proto_tree *zetime_tree, proto_item *ti,
+                             packet_info *pinfo _U_)
+{
+    const gint len = 1;
+    guint value = 0;
+    proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_msg_type, tvb,
+                                 offset, len, ENC_LITTLE_ENDIAN, &value);
+    proto_item_append_text(ti, ", %s", val_to_str(value,
+                           vs_zetime_msg_type_names,
+                           "UNKNOWN MSG TYPE (0x%02x)"));
+    return len;
+}
+
+static gint dissect_payload_length(tvbuff_t *tvb, gint offset,
+                                   proto_tree *zetime_tree,
+                                   guint *payload_len)
+{
+    const gint len = 2;
+    proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_payload_length, tvb,
+                                 offset, len, ENC_LITTLE_ENDIAN,
+                                 payload_len);
+    return len;
+}
+
+static gint dissect_payload(tvbuff_t *tvb, gint offset,
+                            proto_tree *zetime_tree,
+                            guint payload_len)
+{
+    proto_tree_add_item(zetime_tree, hf_zetime_payload, tvb, offset,
+                        payload_len, ENC_NA);
+    return payload_len;
+}
+
 static int
 dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
                                                         void *data _U_)
@@ -64,7 +133,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
      *
      * +----------+----------+----------+----------------+----------+-------+
      * | PREAMBLE | PDU TYPE | MSG TYPE | payload length | payload  |  END  |
-     * |  1 Byte  |  1 Byte  |  1 Byte  |    2 Bytes     |  X Byte  |  1 B  |
+     * |  1 Byte  |  1 Byte  |  1 Byte  |    2 Bytes     | X Bytes  |  1 B  |
      * |  fixed   |   enum   |   enum   |    number      | variable | fixed |
      * +----------+----------+----------+----------------+----------+-------+
      *
@@ -74,66 +143,15 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
                                          ENC_NA);
     proto_tree *zetime_tree = proto_item_add_subtree(ti, ett_zetime);
 
+    guint payload_len = 0;
     gint offset = 0;
 
-    /* preamble (1 Byte) */
-    {
-        const gint len = 1;
-        proto_tree_add_item(zetime_tree, hf_zetime_preamble, tvb, offset, len,
-                            ENC_NA);
-        offset += len;
-    }
-
-    /* pdu type (1 Byte) */
-    {
-        const gint len = 1;
-        guint value = 0;
-        proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_pdu_type, tvb,
-                                     offset, len, ENC_LITTLE_ENDIAN, &value);
-        col_add_fstr(pinfo->cinfo, COL_INFO, "%s", val_to_str(value,
-                     vs_zetime_pdu_type_names,
-                     "UNKNOWN PDU TYPE (0x%02x)"));
-        proto_item_append_text(ti, ", %s", val_to_str(value,
-                               vs_zetime_pdu_type_names,
-                               "UNKNOWN PDU TYPE (0x%02x)"));
-        offset += len;
-    }
-
-    /* msg type (1 Byte) */
-    {
-        const gint len = 1;
-        guint value = 0;
-        proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_msg_type, tvb,
-                                     offset, len, ENC_LITTLE_ENDIAN, &value);
-        proto_item_append_text(ti, ", %s", val_to_str(value,
-                               vs_zetime_msg_type_names,
-                               "UNKNOWN MSG TYPE (0x%02x)"));
-        offset += len;
-    }
-
-    /* payload length and payload (2+X Byte) */
-    {
-        /* payload length (2 Byte) */
-        const gint len = 2;
-        guint payload_len = 0;
-        proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_payload_length, tvb,
-                                     offset, len, ENC_LITTLE_ENDIAN,
-                                     &payload_len);
-        offset += len;
-
-        /* payload (X Byte) */
-        proto_tree_add_item(zetime_tree, hf_zetime_payload, tvb,
-                            offset, payload_len, ENC_NA);
-        offset += payload_len;
-    }
-
-    /* end (1 Byte) */
-    {
-        const gint len = 1;
-        proto_tree_add_item(zetime_tree, hf_zetime_end, tvb, offset, len,
-                            ENC_NA);
-        offset += len;
-    }
+    offset += dissect_preamble(tvb, offset, zetime_tree);
+    offset += dissect_pdu_type(tvb, offset, zetime_tree, ti, pinfo);
+    offset += dissect_msg_type(tvb, offset, zetime_tree, ti, pinfo);
+    offset += dissect_payload_length(tvb, offset, zetime_tree, &payload_len);
+    offset += dissect_payload(tvb, offset, zetime_tree, payload_len);
+    offset += dissect_end(tvb, offset, zetime_tree);
 
     return tvb_captured_length(tvb);
 }
