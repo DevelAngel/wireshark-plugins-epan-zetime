@@ -14,11 +14,12 @@
 #include "config.h"
 
 #include <epan/packet.h>
-
-#define ZETIME_PORT 7000 /* Not IANA registed */
+#include <epan/dissectors/packet-bluetooth.h>
 
 static int proto_zetime = -1;
+
 static gint ett_zetime = -1;
+
 static int hf_zetime_preamble = -1;
 static int hf_zetime_pdu_type = -1;
 static int hf_zetime_msg_type = -1;
@@ -156,6 +157,20 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
     return tvb_captured_length(tvb);
 }
 
+static int
+dissect_zetime_uuid_8001(tvbuff_t *tvb, packet_info *pinfo,
+                         proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid_8002(tvbuff_t *tvb, packet_info *pinfo,
+                         proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
 void
 proto_register_zetime(void)
 {
@@ -216,10 +231,31 @@ proto_register_zetime(void)
 void
 proto_reg_handoff_zetime(void)
 {
-    dissector_handle_t zetime_handle;
+    const struct uuid_dissectors_t {
+        const gchar * const uuid;
+              gchar * const short_name;
 
-    zetime_handle = create_dissector_handle(dissect_zetime, proto_zetime);
-    dissector_add_uint("udp.port", ZETIME_PORT, zetime_handle);
+        int (* const dissect_func)(tvbuff_t *tvb, packet_info *pinfo,
+                                   proto_tree *tree, void *data);
+    } uuid_dissectors[] = {
+        { "6006", "ZeTime Service", NULL },
+        { "8001", "ZeTime 1", dissect_zetime_uuid_8001 },
+        { "8002", "ZeTime 2", dissect_zetime_uuid_8002 },
+
+        { NULL, NULL, NULL } /* end of list */
+    };
+    for (gint i = 0; uuid_dissectors[i].uuid; ++i) {
+        wmem_tree_insert_string(bluetooth_uuids, uuid_dissectors[i].uuid,
+                                uuid_dissectors[i].short_name, 0);
+
+        if (uuid_dissectors[i].dissect_func) {
+            dissector_handle_t handle = create_dissector_handle(
+                                            uuid_dissectors[i].dissect_func,
+                                            proto_zetime);
+            dissector_add_string("bluetooth.uuid", uuid_dissectors[i].uuid,
+                                 handle);
+        }
+    }
 }
 
 /*
