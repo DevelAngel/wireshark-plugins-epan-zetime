@@ -54,8 +54,8 @@ static const value_string vs_zetime_msg_type_names[] = {
     { 0, NULL } //< end of array
 };
 
-static gint dissect_preamble(tvbuff_t *tvb, gint offset,
-                             proto_tree *zetime_tree)
+static gint
+dissect_preamble(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
 {
     const gint len = 1;
     proto_tree_add_item(zetime_tree, hf_zetime_preamble, tvb, offset, len,
@@ -63,8 +63,8 @@ static gint dissect_preamble(tvbuff_t *tvb, gint offset,
     return len;
 }
 
-static gint dissect_end(tvbuff_t *tvb, gint offset,
-                        proto_tree *zetime_tree)
+static gint
+dissect_end(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
 {
     const gint len = 1;
     proto_tree_add_item(zetime_tree, hf_zetime_end, tvb, offset, len,
@@ -72,9 +72,9 @@ static gint dissect_end(tvbuff_t *tvb, gint offset,
     return len;
 }
 
-static gint dissect_pdu_type(tvbuff_t *tvb, gint offset,
-                             proto_tree *zetime_tree, proto_item *ti,
-                             packet_info *pinfo)
+static gint
+dissect_pdu_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
+                 proto_item *ti, packet_info *pinfo)
 {
     const gint len = 1;
     guint value = 0;
@@ -89,9 +89,9 @@ static gint dissect_pdu_type(tvbuff_t *tvb, gint offset,
     return len;
 }
 
-static gint dissect_msg_type(tvbuff_t *tvb, gint offset,
-                             proto_tree *zetime_tree, proto_item *ti,
-                             packet_info *pinfo _U_)
+static gint
+dissect_msg_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
+                 proto_item *ti, packet_info *pinfo _U_)
 {
     const gint len = 1;
     guint value = 0;
@@ -103,9 +103,9 @@ static gint dissect_msg_type(tvbuff_t *tvb, gint offset,
     return len;
 }
 
-static gint dissect_payload_length(tvbuff_t *tvb, gint offset,
-                                   proto_tree *zetime_tree,
-                                   guint *payload_len)
+static gint
+dissect_payload_length(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
+                       guint *payload_len)
 {
     const gint len = 2;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_payload_length, tvb,
@@ -114,9 +114,9 @@ static gint dissect_payload_length(tvbuff_t *tvb, gint offset,
     return len;
 }
 
-static gint dissect_payload(tvbuff_t *tvb, gint offset,
-                            proto_tree *zetime_tree,
-                            guint payload_len)
+static gint
+dissect_payload(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
+                guint payload_len)
 {
     proto_tree_add_item(zetime_tree, hf_zetime_payload, tvb, offset,
                         payload_len, ENC_NA);
@@ -125,7 +125,7 @@ static gint dissect_payload(tvbuff_t *tvb, gint offset,
 
 static int
 dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
-                                                        void *data _U_)
+               void *data _U_)
 {
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "ZeTime");
     col_clear(pinfo->cinfo, COL_INFO);
