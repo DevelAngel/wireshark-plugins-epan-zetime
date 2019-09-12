@@ -27,24 +27,25 @@ static int hf_zetime_payload_length = -1;
 static int hf_zetime_payload = -1;
 static int hf_zetime_end = -1;
 
-static const value_string vs_zetime_pdu_type_names[] = {
-    { 0x01, "Receipt" }, //< ???
-    { 0x02, "Serial Number" },
-    { 0x03, "0x03" }, //< ???
-    { 0x04, "Time Synchronization" },
-    { 0x0b, "0x0b" }, //< ???
-    { 0x0c, "0x0c" }, //< ???
-    { 0x18, "0x18" }, //< ???
-    { 0x52, "Information Availability" },
-    { 0x53, "0x53" }, //< ???
-    { 0x54, "Activity Report" },
-    { 0x5a, "0x5a" }, //< ???
-    { 0x61, "Heart Rate Frequency" },
-    { 0x98, "Calendar Month View" },
-    { 0x99, "Calendar Day View" },
-    { 0xe2, "0xe2" }, //< ???
-    { 0, NULL } //< end of array
-};
+#define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
+    XXX(ZETIME_PDU_TYPE_RECEIPT, 0x01, "Receipt") \
+    XXX(ZETIME_PDU_TYPE_SERIALNUMBER, 0x02, "Serial Number") \
+    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x03, 0x03, "UNKNOWN 0x03") \
+    XXX(ZETIME_PDU_TYPE_TIMESYNC, 0x04, "Time Synchronization") \
+    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0b, 0x0b, "UNKNOWN 0x0b") \
+    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0c, 0x0c, "UNKNOWN 0x0c") \
+    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x18, 0x18, "UNKNOWN 0x18") \
+    XXX(ZETIME_PDU_TYPE_INFOAVAIL, 0x52, "Information Availability") \
+    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x53, 0x53, "UNKNOWN 0x53") \
+    XXX(ZETIME_PDU_TYPE_ACTIVITYREPORT, 0x54, "Activity Report") \
+    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x5a, 0x5a, "UNKNOWN 0x5a") \
+    XXX(ZETIME_PDU_TYPE_HEARTRATEFREQ, 0x61, "Heart Rate Frequency") \
+    XXX(ZETIME_PDU_TYPE_CALMONVIEW, 0x98, "Calendar Month View") \
+    XXX(ZETIME_PDU_TYPE_CALDAYVIEW, 0x99, "Calendar Day View") \
+    XXX(ZETIME_PDU_TYPE_UNKNOWN_0xe2, 0xe2, "UNKNOWN 0xe2")
+
+VALUE_STRING_ENUM(zetime_pdu_type);
+VALUE_STRING_ARRAY(zetime_pdu_type);
 
 static const value_string vs_zetime_msg_type_names[] = {
     { 0x70, "Request" },
@@ -81,10 +82,10 @@ dissect_pdu_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_pdu_type, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN, &value);
     proto_item_append_text(ti, ", %s", val_to_str(value,
-                           vs_zetime_pdu_type_names,
+                           zetime_pdu_type,
                            "UNKNOWN PDU TYPE (0x%02x)"));
     col_add_fstr(pinfo->cinfo, COL_INFO, "%s", val_to_str(value,
-                 vs_zetime_pdu_type_names,
+                 zetime_pdu_type,
                  "UNKNOWN PDU TYPE (0x%02x)"));
     return len;
 }
@@ -184,7 +185,7 @@ proto_register_zetime(void)
         { &hf_zetime_pdu_type,
             { "PDU Type", "zetime.pdu_type",
             FT_UINT8, BASE_DEC,
-            VALS(vs_zetime_pdu_type_names), 0x0,
+            VALS(zetime_pdu_type), 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_msg_type,
