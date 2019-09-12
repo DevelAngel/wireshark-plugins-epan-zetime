@@ -27,6 +27,13 @@ static int hf_zetime_payload_length = -1;
 static int hf_zetime_payload = -1;
 static int hf_zetime_end = -1;
 
+static int hf_zetime_packet_number = -1;
+static int hf_zetime_timestamp = -1;
+static int hf_zetime_steps = -1;
+static int hf_zetime_calories_burnt = -1;
+static int hf_zetime_meters_walked = -1;
+static int hf_zetime_activity_minutes = -1;
+
 #define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
     XXX(ZETIME_PDU_TYPE_RECEIPT, 0x01, "Receipt") \
     XXX(ZETIME_PDU_TYPE_SERIALNUMBER, 0x02, "Serial Number") \
@@ -65,18 +72,19 @@ dissect_preamble(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
     return len;
 }
 
+#define ZETIME_CMD_END_LEN 1
+
 static gint
 dissect_end(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
 {
-    const gint len = 1;
-    proto_tree_add_item(zetime_tree, hf_zetime_end, tvb, offset, len,
-                        ENC_NA);
-    return len;
+    proto_tree_add_item(zetime_tree, hf_zetime_end, tvb, offset,
+                        ZETIME_CMD_END_LEN, ENC_NA);
+    return ZETIME_CMD_END_LEN;
 }
 
 static gint
 dissect_pdu_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
-                 proto_item *ti, packet_info *pinfo)
+                 proto_item *ti, packet_info *pinfo, guint *valueRet)
 {
     const gint len = 1;
     guint value = 0;
@@ -88,12 +96,16 @@ dissect_pdu_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
     col_add_fstr(pinfo->cinfo, COL_INFO, "%s", val_to_str(value,
                  zetime_pdu_type,
                  "UNKNOWN PDU TYPE (0x%02x)"));
+
+    if (valueRet) {
+        *valueRet = value;
+    }
     return len;
 }
 
 static gint
 dissect_msg_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
-                 proto_item *ti, packet_info *pinfo _U_)
+                 proto_item *ti, packet_info *pinfo _U_, guint *valueRet)
 {
     const gint len = 1;
     guint value = 0;
@@ -102,27 +114,96 @@ dissect_msg_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
     proto_item_append_text(ti, ", %s", val_to_str(value,
                            zetime_msg_type,
                            "UNKNOWN MSG TYPE (0x%02x)"));
+
+    if (valueRet) {
+        *valueRet = value;
+    }
     return len;
 }
 
 static gint
 dissect_payload_length(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
-                       guint *payload_len)
+                       gint *payload_len)
 {
     const gint len = 2;
+    guint plen = 0;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_payload_length, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN,
-                                 payload_len);
+                                 &plen);
+    if (payload_len) {
+        *payload_len = plen;
+    }
     return len;
 }
 
 static gint
-dissect_payload(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
-                guint payload_len)
+dissect_packet_number(tvbuff_t *tvb, gint offset, proto_tree *tree)
 {
-    proto_tree_add_item(zetime_tree, hf_zetime_payload, tvb, offset,
-                        payload_len, ENC_NA);
-    return payload_len;
+    const gint len = 2;
+    proto_tree_add_item(tree, hf_zetime_packet_number, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_timestamp(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 4;
+    proto_tree_add_item(tree, hf_zetime_timestamp, tvb, offset, len, ENC_LITTLE_ENDIAN | ENC_TIME_SECS);
+    return len;
+}
+
+static gint
+dissect_steps(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 4;
+    proto_tree_add_item(tree, hf_zetime_steps, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_calories_burnt(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 4;
+    proto_tree_add_item(tree, hf_zetime_calories_burnt, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_meters_walked(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 4;
+    proto_tree_add_item(tree, hf_zetime_meters_walked, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_activity_minutes(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 4;
+    proto_tree_add_item(tree, hf_zetime_activity_minutes, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static guint
+dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
+                                proto_tree *tree, void *data _U_)
+{
+    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, -1, ENC_NA);
+    return tvb_captured_length(tvb);
+}
+
+static guint
+dissect_activity_response(tvbuff_t *tvb, packet_info *pinfo _U_,
+                                proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_packet_number(tvb, offset, tree);
+    offset += dissect_timestamp(tvb, offset, tree);
+    offset += dissect_steps(tvb, offset, tree);
+    offset += dissect_calories_burnt(tvb, offset, tree);
+    offset += dissect_meters_walked(tvb, offset, tree);
+    offset += dissect_activity_minutes(tvb, offset, tree);
+    return offset;
 }
 
 static int
@@ -146,17 +227,78 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
                                          ENC_NA);
     proto_tree *zetime_tree = proto_item_add_subtree(ti, ett_zetime);
 
-    guint payload_len = 0;
+    guint pdu_type = 0;
+    guint msg_type = 0;
+    gint payload_len = 0;
     gint offset = 0;
 
     offset += dissect_preamble(tvb, offset, zetime_tree);
-    offset += dissect_pdu_type(tvb, offset, zetime_tree, ti, pinfo);
-    offset += dissect_msg_type(tvb, offset, zetime_tree, ti, pinfo);
+    offset += dissect_pdu_type(tvb, offset, zetime_tree, ti, pinfo, &pdu_type);
+    offset += dissect_msg_type(tvb, offset, zetime_tree, ti, pinfo, &msg_type);
     offset += dissect_payload_length(tvb, offset, zetime_tree, &payload_len);
-    offset += dissect_payload(tvb, offset, zetime_tree, payload_len);
-    offset += dissect_end(tvb, offset, zetime_tree);
 
-    return tvb_captured_length(tvb);
+    const gboolean fragmented = tvb_captured_length_remaining(tvb, offset)
+                              < payload_len + ZETIME_CMD_END_LEN;
+    {
+        tvbuff_t *const payload_tvb = tvb_new_subset_length_caplen(tvb, offset, 
+                                      fragmented ? -1 : payload_len, payload_len);
+        switch (pdu_type) {
+        case ZETIME_PDU_TYPE_RECEIPT:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_SERIALNUMBER:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_UNKNOWN_0x03:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_TIMESYNC:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_UNKNOWN_0x0b:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_UNKNOWN_0x0c:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_UNKNOWN_0x18:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_INFOAVAIL:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_UNKNOWN_0x53:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_ACTIVITYREPORT:
+            offset += dissect_activity_response(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_UNKNOWN_0x5a:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_HEARTRATEFREQ:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_CALMONVIEW:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_CALDAYVIEW:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        case ZETIME_PDU_TYPE_UNKNOWN_0xe2:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        default:
+            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            break;
+        }
+    }
+
+    if (!fragmented) {
+        offset += dissect_end(tvb, offset, zetime_tree);
+    }
+
+    return offset;
 }
 
 static int
@@ -210,6 +352,42 @@ proto_register_zetime(void)
         { &hf_zetime_end,
             { "END", "zetime.end",
             FT_NONE, BASE_NONE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_packet_number,
+            { "Packet Number", "zetime.packet_number",
+            FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_timestamp,
+            { "Timestamp", "zetime.timestamp",
+            FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_steps,
+            { "Steps", "zetime.steps",
+            FT_UINT32, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_calories_burnt,
+            { "Calories burnt", "zetime.calories_burnt",
+            FT_UINT32, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_meters_walked,
+            { "Meters walked", "zetime.meters_walked",
+            FT_UINT32, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_activity_minutes,
+            { "Minutes of activity", "zetime.activity_minutes",
+            FT_UINT32, BASE_DEC,
             NULL, 0x0,
             NULL, HFILL }
         },
