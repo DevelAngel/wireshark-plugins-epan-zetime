@@ -47,13 +47,14 @@ static int hf_zetime_end = -1;
 VALUE_STRING_ENUM(zetime_pdu_type);
 VALUE_STRING_ARRAY(zetime_pdu_type);
 
-static const value_string vs_zetime_msg_type_names[] = {
-    { 0x70, "Request" },
-    { 0x71, "Notification" },
-    { 0x80, "Response" },
-    { 0x81, "Confirmation" },
-    { 0, NULL } //< end of array
-};
+#define zetime_msg_type_VALUE_STRING_LIST(XXX)    \
+    XXX(ZETIME_MSG_TYPE_RECEIPT, 0x70, "Request") \
+    XXX(ZETIME_MSG_TYPE_NOTIFICATION, 0x71, "Notification") \
+    XXX(ZETIME_MSG_TYPE_RESPONSE, 0x80, "Response") \
+    XXX(ZETIME_MSG_TYPE_CONFIRMATION, 0x81, "Confirmation") \
+
+VALUE_STRING_ENUM(zetime_msg_type);
+VALUE_STRING_ARRAY(zetime_msg_type);
 
 static gint
 dissect_preamble(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
@@ -99,7 +100,7 @@ dissect_msg_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_msg_type, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN, &value);
     proto_item_append_text(ti, ", %s", val_to_str(value,
-                           vs_zetime_msg_type_names,
+                           zetime_msg_type,
                            "UNKNOWN MSG TYPE (0x%02x)"));
     return len;
 }
@@ -191,7 +192,7 @@ proto_register_zetime(void)
         { &hf_zetime_msg_type,
             { "MSG Type", "zetime.msg_type",
             FT_UINT8, BASE_HEX,
-            VALS(vs_zetime_msg_type_names), 0x0,
+            VALS(zetime_msg_type), 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_payload_length,
