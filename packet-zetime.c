@@ -25,6 +25,7 @@ static int hf_zetime_pdu_type = -1;
 static int hf_zetime_action = -1;
 static int hf_zetime_payload_length = -1;
 static int hf_zetime_payload = -1;
+static int hf_zetime_payload_unkown = -1;
 static int hf_zetime_end = -1;
 
 static int hf_zetime_packet_number = -1;
@@ -188,7 +189,7 @@ static guint
 dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
 {
-    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, -1, ENC_NA);
+    proto_tree_add_item(tree, hf_zetime_payload_unkown, tvb, 0, -1, ENC_NA);
     return tvb_captured_length(tvb);
 }
 
@@ -415,6 +416,12 @@ proto_register_zetime(void)
         },
         { &hf_zetime_payload,
             { "Payload", "zetime.payload",
+            FT_BYTES, BASE_NO_DISPLAY_VALUE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_payload_unkown,
+            { "Unknown Payload", "zetime.payload_unkown",
             FT_BYTES, BASE_NO_DISPLAY_VALUE,
             NULL, 0x0,
             NULL, HFILL }
