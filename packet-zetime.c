@@ -222,13 +222,12 @@ dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
-dissect_available_data_request(tvbuff_t *tvb, packet_info *pinfo _U_,
-                               proto_tree *tree, void *data _U_)
+dissect_request(tvbuff_t *tvb, packet_info *pinfo _U_,
+                proto_tree *tree, void *data _U_, guint expected_len)
 {
-    gint offset = 0;
-    // payload should have size of 1 byte and contains only zeros
-    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, -1, ENC_NA);
-    return offset;
+    // payload should contain only zeros
+    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, expected_len, ENC_NA);
+    return expected_len;
 }
 
 static guint
@@ -242,16 +241,6 @@ dissect_available_data_response(tvbuff_t *tvb, packet_info *pinfo _U_,
     // unkown 2 byte data, should be zeros
     offset += dissect_payload_unknown(tvb_new_subset_length(tvb, offset, 2),
                                       pinfo, tree, data);
-    return offset;
-}
-
-static guint
-dissect_get_step_count_request(tvbuff_t *tvb, packet_info *pinfo _U_,
-                               proto_tree *tree, void *data _U_)
-{
-    gint offset = 0;
-    // payload should have size of 2 byte and contains only zeros
-    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, -1, ENC_NA);
     return offset;
 }
 
@@ -330,7 +319,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_AVAILABLE_DATA:
             switch (action) {
             case ZETIME_ACTION_REQUEST:
-                offset += dissect_available_data_request(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_request(payload_tvb, pinfo, zetime_tree, data, 1);
                 break;
             case ZETIME_ACTION_RESPONSE:
                 offset += dissect_available_data_response(payload_tvb, pinfo, zetime_tree, data);
@@ -347,7 +336,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_GET_STEP_COUNT:
             switch (action) {
             case ZETIME_ACTION_REQUEST:
-                offset += dissect_get_step_count_request(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_request(payload_tvb, pinfo, zetime_tree, data, 2);
                 break;
             case ZETIME_ACTION_RESPONSE:
                 offset += dissect_get_step_count_response(payload_tvb, pinfo, zetime_tree, data);
