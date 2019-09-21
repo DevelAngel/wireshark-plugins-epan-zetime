@@ -194,7 +194,17 @@ dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
-dissect_get_step_count(tvbuff_t *tvb, packet_info *pinfo _U_,
+dissect_get_step_count_request(tvbuff_t *tvb, packet_info *pinfo _U_,
+                               proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    // payload should have size of 2 byte and contains only zeros
+    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, -1, ENC_NA);
+    return offset;
+}
+
+static guint
+dissect_get_step_count_response(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
 {
     gint offset = 0;
@@ -272,7 +282,18 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
         case ZETIME_PDU_TYPE_GET_STEP_COUNT:
-            offset += dissect_get_step_count(payload_tvb, pinfo, zetime_tree, data);
+            switch (action) {
+            case ZETIME_ACTION_REQUEST:
+                offset += dissect_get_step_count_request(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            case ZETIME_ACTION_RESPONSE:
+                offset += dissect_get_step_count_response(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_UNKNOWN_0x5a:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
