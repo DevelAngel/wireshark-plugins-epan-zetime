@@ -22,7 +22,7 @@ static gint ett_zetime = -1;
 
 static int hf_zetime_preamble = -1;
 static int hf_zetime_pdu_type = -1;
-static int hf_zetime_msg_type = -1;
+static int hf_zetime_action = -1;
 static int hf_zetime_payload_length = -1;
 static int hf_zetime_payload = -1;
 static int hf_zetime_end = -1;
@@ -54,14 +54,14 @@ static int hf_zetime_activity_minutes = -1;
 VALUE_STRING_ENUM(zetime_pdu_type);
 VALUE_STRING_ARRAY(zetime_pdu_type);
 
-#define zetime_msg_type_VALUE_STRING_LIST(XXX)    \
-    XXX(ZETIME_MSG_TYPE_RECEIPT, 0x70, "Request") \
-    XXX(ZETIME_MSG_TYPE_NOTIFICATION, 0x71, "Notification") \
-    XXX(ZETIME_MSG_TYPE_RESPONSE, 0x80, "Response") \
-    XXX(ZETIME_MSG_TYPE_CONFIRMATION, 0x81, "Confirmation") \
+#define zetime_action_VALUE_STRING_LIST(XXX)    \
+    XXX(ZETIME_ACTION_REQUEST, 0x70, "Request") \
+    XXX(ZETIME_ACTION_SEND, 0x71, "Send") \
+    XXX(ZETIME_ACTION_RESPONSE, 0x80, "Response") \
+    XXX(ZETIME_ACTION_CONFIRMATION, 0x81, "Confirmation") \
 
-VALUE_STRING_ENUM(zetime_msg_type);
-VALUE_STRING_ARRAY(zetime_msg_type);
+VALUE_STRING_ENUM(zetime_action);
+VALUE_STRING_ARRAY(zetime_action);
 
 static gint
 dissect_preamble(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
@@ -104,16 +104,16 @@ dissect_pdu_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
 }
 
 static gint
-dissect_msg_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
+dissect_action(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
                  proto_item *ti, packet_info *pinfo _U_, guint *valueRet)
 {
     const gint len = 1;
     guint value = 0;
-    proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_msg_type, tvb,
+    proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_action, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN, &value);
     proto_item_append_text(ti, ", %s", val_to_str(value,
-                           zetime_msg_type,
-                           "UNKNOWN MSG TYPE (0x%02x)"));
+                           zetime_action,
+                           "UNKNOWN ACTION (0x%02x)"));
 
     if (valueRet) {
         *valueRet = value;
@@ -216,7 +216,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
     /* General message composition
      *
      * +----------+----------+----------+----------------+----------+-------+
-     * | PREAMBLE | PDU TYPE | MSG TYPE | payload length | payload  |  END  |
+     * | PREAMBLE | PDU TYPE |  ACTION  | payload length | payload  |  END  |
      * |  1 Byte  |  1 Byte  |  1 Byte  |    2 Bytes     | X Bytes  |  1 B  |
      * |  fixed   |   enum   |   enum   |    number      | variable | fixed |
      * +----------+----------+----------+----------------+----------+-------+
@@ -228,13 +228,13 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
     proto_tree *zetime_tree = proto_item_add_subtree(ti, ett_zetime);
 
     guint pdu_type = 0;
-    guint msg_type = 0;
+    guint action = 0;
     gint payload_len = 0;
     gint offset = 0;
 
     offset += dissect_preamble(tvb, offset, zetime_tree);
     offset += dissect_pdu_type(tvb, offset, zetime_tree, ti, pinfo, &pdu_type);
-    offset += dissect_msg_type(tvb, offset, zetime_tree, ti, pinfo, &msg_type);
+    offset += dissect_action(tvb, offset, zetime_tree, ti, pinfo, &action);
     offset += dissect_payload_length(tvb, offset, zetime_tree, &payload_len);
 
     const gboolean fragmented = tvb_captured_length_remaining(tvb, offset)
@@ -401,10 +401,10 @@ proto_register_zetime(void)
             VALS(zetime_pdu_type), 0x0,
             NULL, HFILL }
         },
-        { &hf_zetime_msg_type,
-            { "MSG Type", "zetime.msg_type",
+        { &hf_zetime_action,
+            { "Action", "zetime.action",
             FT_UINT8, BASE_HEX,
-            VALS(zetime_msg_type), 0x0,
+            VALS(zetime_action), 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_payload_length,
