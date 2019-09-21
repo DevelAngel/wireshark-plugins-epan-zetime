@@ -34,6 +34,7 @@ static int hf_zetime_steps = -1;
 static int hf_zetime_calories_burnt = -1;
 static int hf_zetime_meters_walked = -1;
 static int hf_zetime_activity_minutes = -1;
+static int hf_zetime_heart_rate = -1;
 
 static int hf_zetime_available_steps = -1;
 static int hf_zetime_available_sleep = -1;
@@ -51,7 +52,7 @@ static int hf_zetime_available_heart_rate = -1;
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x53, 0x53, "UNKNOWN 0x53") \
     XXX(ZETIME_PDU_TYPE_GET_STEP_COUNT, 0x54, "Step Count") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x5a, 0x5a, "UNKNOWN 0x5a") \
-    XXX(ZETIME_PDU_TYPE_HEARTRATEFREQ, 0x61, "Heart Rate Frequency") \
+    XXX(ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA, 0x61, "Heart Rate Exdata") \
     XXX(ZETIME_PDU_TYPE_CALMONVIEW, 0x98, "Calendar Month View") \
     XXX(ZETIME_PDU_TYPE_CALDAYVIEW, 0x99, "Calendar Day View") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0xe2, 0xe2, "UNKNOWN 0xe2")
@@ -190,6 +191,14 @@ dissect_activity_minutes(tvbuff_t *tvb, gint offset, proto_tree *tree)
 }
 
 static gint
+dissect_heart_rate(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_heart_rate, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
 dissect_available_steps(tvbuff_t *tvb, gint offset, proto_tree *tree)
 {
     const gint len = 2;
@@ -255,6 +264,19 @@ dissect_get_step_count_response(tvbuff_t *tvb, packet_info *pinfo _U_,
     offset += dissect_calories_burnt(tvb, offset, tree);
     offset += dissect_meters_walked(tvb, offset, tree);
     offset += dissect_activity_minutes(tvb, offset, tree);
+    return offset;
+}
+
+static guint
+dissect_get_heartrate_exdata_response(tvbuff_t *tvb, packet_info *pinfo _U_,
+                                      proto_tree *tree, void *data _U_)
+{
+    guint offset = 0;
+    do {
+        offset += dissect_packet_number(tvb, offset, tree);
+        offset += dissect_timestamp(tvb, offset, tree);
+        offset += dissect_heart_rate(tvb, offset, tree);
+    } while(offset < tvb_captured_length(tvb));
     return offset;
 }
 
@@ -350,8 +372,19 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_UNKNOWN_0x5a:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
-        case ZETIME_PDU_TYPE_HEARTRATEFREQ:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+        case ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA:
+            switch (action) {
+            case ZETIME_ACTION_REQUEST:
+                offset += dissect_request(payload_tvb, pinfo, zetime_tree, data, 1);
+                break;
+            case ZETIME_ACTION_RESPONSE:
+                offset += dissect_get_heartrate_exdata_response(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_CALMONVIEW:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -538,6 +571,12 @@ proto_register_zetime(void)
         { &hf_zetime_activity_minutes,
             { "Minutes of activity", "zetime.activity_minutes",
             FT_UINT32, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_heart_rate,
+            { "Heart Rate", "zetime.heart_rate",
+            FT_UINT8, BASE_DEC,
             NULL, 0x0,
             NULL, HFILL }
         },
