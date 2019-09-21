@@ -44,7 +44,7 @@ static int hf_zetime_activity_minutes = -1;
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x18, 0x18, "UNKNOWN 0x18") \
     XXX(ZETIME_PDU_TYPE_INFOAVAIL, 0x52, "Information Availability") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x53, 0x53, "UNKNOWN 0x53") \
-    XXX(ZETIME_PDU_TYPE_ACTIVITYREPORT, 0x54, "Activity Report") \
+    XXX(ZETIME_PDU_TYPE_GET_STEP_COUNT, 0x54, "Step Count") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x5a, 0x5a, "UNKNOWN 0x5a") \
     XXX(ZETIME_PDU_TYPE_HEARTRATEFREQ, 0x61, "Heart Rate Frequency") \
     XXX(ZETIME_PDU_TYPE_CALMONVIEW, 0x98, "Calendar Month View") \
@@ -193,7 +193,7 @@ dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
-dissect_activity_response(tvbuff_t *tvb, packet_info *pinfo _U_,
+dissect_get_step_count(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
 {
     gint offset = 0;
@@ -270,8 +270,8 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_UNKNOWN_0x53:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
-        case ZETIME_PDU_TYPE_ACTIVITYREPORT:
-            offset += dissect_activity_response(payload_tvb, pinfo, zetime_tree, data);
+        case ZETIME_PDU_TYPE_GET_STEP_COUNT:
+            offset += dissect_get_step_count(payload_tvb, pinfo, zetime_tree, data);
             break;
         case ZETIME_PDU_TYPE_UNKNOWN_0x5a:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
