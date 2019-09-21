@@ -302,15 +302,85 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
 }
 
 static int
-dissect_zetime_uuid_8001(tvbuff_t *tvb, packet_info *pinfo,
+dissect_zetime_uuid16_write(tvbuff_t *tvb, packet_info *pinfo,
+                          proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid128_write(tvbuff_t *tvb, packet_info *pinfo,
+                          proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid16_ack(tvbuff_t *tvb, packet_info *pinfo,
+                        proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid128_ack(tvbuff_t *tvb, packet_info *pinfo,
+                        proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid16_reply(tvbuff_t *tvb, packet_info *pinfo,
+                          proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid128_reply(tvbuff_t *tvb, packet_info *pinfo,
+                          proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid16_notify(tvbuff_t *tvb, packet_info *pinfo,
+                           proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid128_notify(tvbuff_t *tvb, packet_info *pinfo,
+                           proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid16_8005(tvbuff_t *tvb, packet_info *pinfo,
                          proto_tree *tree _U_, void *data _U_)
 {
     return dissect_zetime(tvb, pinfo, tree, data);
 }
 
 static int
-dissect_zetime_uuid_8002(tvbuff_t *tvb, packet_info *pinfo,
+dissect_zetime_uuid128_8005(tvbuff_t *tvb, packet_info *pinfo,
                          proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid16_heart_rate(tvbuff_t *tvb, packet_info *pinfo,
+                               proto_tree *tree _U_, void *data _U_)
+{
+    return dissect_zetime(tvb, pinfo, tree, data);
+}
+
+static int
+dissect_zetime_uuid128_heart_rate(tvbuff_t *tvb, packet_info *pinfo,
+                               proto_tree *tree _U_, void *data _U_)
 {
     return dissect_zetime(tvb, pinfo, tree, data);
 }
@@ -418,9 +488,33 @@ proto_reg_handoff_zetime(void)
         int (* const dissect_func)(tvbuff_t *tvb, packet_info *pinfo,
                                    proto_tree *tree, void *data);
     } uuid_dissectors[] = {
-        { "6006", "ZeTime Service", NULL },
-        { "8001", "ZeTime 1", dissect_zetime_uuid_8001 },
-        { "8002", "ZeTime 2", dissect_zetime_uuid_8002 },
+        /*
+         * uuid characteristics
+         */
+        { "8001", "ZeTime Write", dissect_zetime_uuid16_write },
+        { "00008001-0000-1000-8000-00805f9b34fb", "ZeTime Write", dissect_zetime_uuid128_write },
+        { "8002", "ZeTime Ack", dissect_zetime_uuid16_ack },
+        { "00008002-0000-1000-8000-00805f9b34fb", "ZeTime Ack", dissect_zetime_uuid128_ack },
+        { "8003", "ZeTime Reply", dissect_zetime_uuid16_reply },
+        { "00008003-0000-1000-8000-00805f9b34fb", "ZeTime Reply", dissect_zetime_uuid128_reply },
+        { "8004", "ZeTime Notify", dissect_zetime_uuid16_notify },
+        { "00008004-0000-1000-8000-00805f9b34fb", "ZeTime Notify", dissect_zetime_uuid128_notify },
+        { "8005", "ZeTime 8005", dissect_zetime_uuid16_8005 },
+        { "00008005-0000-1000-8000-00805f9b34fb", "ZeTime 8005", dissect_zetime_uuid128_8005 },
+        { "2a37", "ZeTime Heart Rate", dissect_zetime_uuid16_heart_rate },
+        { "00002a37-0000-1000-8000-00805f9b34fb", "ZeTime Heart Rate", dissect_zetime_uuid128_heart_rate },
+
+        /* 2902 config descriptor is already defined in packet-btatt */
+
+        /*
+         * uuid services
+         */
+        { "6006", "ZeTime Service Base", NULL },
+        { "00006006-0000-1000-8000-00805f9b34fb", "ZeTime Service Base", NULL },
+        { "7006", "ZeTime Service Extend", NULL },
+        { "00007006-0000-1000-8000-00805f9b34fb", "ZeTime Service Extend", NULL },
+        { "180d", "ZeTime Service Heart Rate", NULL },
+        { "0000180d-0000-1000-8000-00805f9b34fb", "ZeTime Service Heart Rate", NULL },
 
         { NULL, NULL, NULL } /* end of list */
     };
