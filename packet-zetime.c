@@ -35,6 +35,10 @@ static int hf_zetime_calories_burnt = -1;
 static int hf_zetime_meters_walked = -1;
 static int hf_zetime_activity_minutes = -1;
 
+static int hf_zetime_available_steps = -1;
+static int hf_zetime_available_sleep = -1;
+static int hf_zetime_available_heart_rate = -1;
+
 #define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
     XXX(ZETIME_PDU_TYPE_RECEIPT, 0x01, "Receipt") \
     XXX(ZETIME_PDU_TYPE_SERIALNUMBER, 0x02, "Serial Number") \
@@ -185,12 +189,60 @@ dissect_activity_minutes(tvbuff_t *tvb, gint offset, proto_tree *tree)
     return len;
 }
 
+static gint
+dissect_available_steps(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 2;
+    proto_tree_add_item(tree, hf_zetime_available_steps, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_available_sleep(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 2;
+    proto_tree_add_item(tree, hf_zetime_available_sleep, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_available_heart_rate(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 2;
+    proto_tree_add_item(tree, hf_zetime_available_heart_rate, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
 static guint
 dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
 {
     proto_tree_add_item(tree, hf_zetime_payload_unkown, tvb, 0, -1, ENC_NA);
     return tvb_captured_length(tvb);
+}
+
+static guint
+dissect_available_data_request(tvbuff_t *tvb, packet_info *pinfo _U_,
+                               proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    // payload should have size of 1 byte and contains only zeros
+    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, -1, ENC_NA);
+    return offset;
+}
+
+static guint
+dissect_available_data_response(tvbuff_t *tvb, packet_info *pinfo _U_,
+                                proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_available_steps(tvb, offset, tree);
+    offset += dissect_available_sleep(tvb, offset, tree);
+    offset += dissect_available_heart_rate(tvb, offset, tree);
+    // unkown 2 byte data, should be zeros
+    offset += dissect_payload_unknown(tvb_new_subset_length(tvb, offset, 2),
+                                      pinfo, tree, data);
+    return offset;
 }
 
 static guint
@@ -276,7 +328,18 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
         case ZETIME_PDU_TYPE_AVAILABLE_DATA:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            switch (action) {
+            case ZETIME_ACTION_REQUEST:
+                offset += dissect_available_data_request(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            case ZETIME_ACTION_RESPONSE:
+                offset += dissect_available_data_response(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_UNKNOWN_0x53:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -486,6 +549,24 @@ proto_register_zetime(void)
         { &hf_zetime_activity_minutes,
             { "Minutes of activity", "zetime.activity_minutes",
             FT_UINT32, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_available_steps,
+            { "Steps", "zetime.available.steps",
+            FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_available_sleep,
+            { "Sleep", "zetime.available.sleep",
+            FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_available_heart_rate,
+            { "Sleep", "zetime.available.heart_rate",
+            FT_UINT16, BASE_DEC,
             NULL, 0x0,
             NULL, HFILL }
         },
