@@ -43,7 +43,7 @@ static int hf_zetime_activity_minutes = -1;
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0b, 0x0b, "UNKNOWN 0x0b") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0c, 0x0c, "UNKNOWN 0x0c") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x18, 0x18, "UNKNOWN 0x18") \
-    XXX(ZETIME_PDU_TYPE_INFOAVAIL, 0x52, "Information Availability") \
+    XXX(ZETIME_PDU_TYPE_AVAILABLE_DATA, 0x52, "Available Data") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x53, 0x53, "UNKNOWN 0x53") \
     XXX(ZETIME_PDU_TYPE_GET_STEP_COUNT, 0x54, "Step Count") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x5a, 0x5a, "UNKNOWN 0x5a") \
@@ -275,7 +275,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_UNKNOWN_0x18:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
-        case ZETIME_PDU_TYPE_INFOAVAIL:
+        case ZETIME_PDU_TYPE_AVAILABLE_DATA:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
         case ZETIME_PDU_TYPE_UNKNOWN_0x53:
