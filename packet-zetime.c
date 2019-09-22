@@ -29,6 +29,8 @@ static int hf_zetime_payload = -1;
 static int hf_zetime_payload_unkown = -1;
 static int hf_zetime_end = -1;
 
+static int hf_zetime_version_type = -1;
+static int hf_zetime_version_info = -1;
 static int hf_zetime_packet_number = -1;
 static int hf_zetime_timestamp = -1;
 static int hf_zetime_steps = -1;
@@ -44,7 +46,7 @@ static int hf_zetime_available_heart_rate = -1;
 #define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
     XXX(ZETIME_PDU_TYPE_RECEIPT, 0x01, "Receipt") \
     XXX(ZETIME_PDU_TYPE_SERIALNUMBER, 0x02, "Serial Number") \
-    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x03, 0x03, "UNKNOWN 0x03") \
+    XXX(ZETIME_PDU_TYPE_DEVICE_VERSION, 0x03, "Device Version") \
     XXX(ZETIME_PDU_TYPE_TIMESYNC, 0x04, "Time Synchronization") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0b, 0x0b, "UNKNOWN 0x0b") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0c, 0x0c, "UNKNOWN 0x0c") \
@@ -69,6 +71,14 @@ VALUE_STRING_ARRAY(zetime_pdu_type);
 
 VALUE_STRING_ENUM(zetime_action);
 VALUE_STRING_ARRAY(zetime_action);
+
+#define zetime_version_type_VALUE_STRING_LIST(XXX)    \
+    XXX(ZETIME_VERSION_TYPE_HW, 0x00, "Hardware Version") \
+    XXX(ZETIME_VERSION_TYPE_OTHER, 0x02, "Other Version") \
+    XXX(ZETIME_VERSION_TYPE_FW, 0x05, "Firmware Version") \
+
+VALUE_STRING_ENUM(zetime_version_type);
+VALUE_STRING_ARRAY(zetime_version_type);
 
 static gint
 dissect_preamble(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
@@ -140,6 +150,22 @@ dissect_payload_length(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
     if (payload_len) {
         *payload_len = plen;
     }
+    return len;
+}
+
+static gint
+dissect_version_type(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_version_type, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_version_info(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const guint len = tvb_captured_length_remaining(tvb, offset);
+    proto_tree_add_item(tree, hf_zetime_version_info, tvb, offset, len, ENC_NA);
     return len;
 }
 
@@ -241,6 +267,25 @@ dissect_request(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
+dissect_device_version_request(tvbuff_t *tvb, packet_info *pinfo _U_,
+                               proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_version_type(tvb, offset, tree);
+    return offset;
+}
+
+static guint
+dissect_device_version_response(tvbuff_t *tvb, packet_info *pinfo _U_,
+                               proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_version_type(tvb, offset, tree);
+    offset += dissect_version_info(tvb, offset, tree);
+    return offset;
+}
+
+static guint
 dissect_available_data_response(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
 {
@@ -324,8 +369,19 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_SERIALNUMBER:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
-        case ZETIME_PDU_TYPE_UNKNOWN_0x03:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+        case ZETIME_PDU_TYPE_DEVICE_VERSION:
+            switch (action) {
+            case ZETIME_ACTION_REQUEST:
+                offset += dissect_device_version_request(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            case ZETIME_ACTION_RESPONSE:
+                offset += dissect_device_version_response(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_TIMESYNC:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -536,6 +592,18 @@ proto_register_zetime(void)
         { &hf_zetime_end,
             { "END", "zetime.end",
             FT_NONE, BASE_NONE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_version_type,
+            { "Version Type", "zetime.version_type",
+            FT_UINT8, BASE_DEC,
+            VALS(zetime_version_type), 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_version_info,
+            { "Version Type", "zetime.version_info",
+            FT_STRING, STR_ASCII,
             NULL, 0x0,
             NULL, HFILL }
         },
