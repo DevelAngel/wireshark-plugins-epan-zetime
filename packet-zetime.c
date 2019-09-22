@@ -14,6 +14,7 @@
 #include "config.h"
 
 #include <epan/packet.h>
+#include <epan/unit_strings.h>
 #include <epan/dissectors/packet-bluetooth.h>
 
 static int proto_zetime = -1;
@@ -576,8 +577,8 @@ proto_register_zetime(void)
         },
         { &hf_zetime_heart_rate,
             { "Heart Rate", "zetime.heart_rate",
-            FT_UINT8, BASE_DEC,
-            NULL, 0x0,
+            FT_UINT8, BASE_DEC|BASE_UNIT_STRING,
+            &units_bpm, 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_available_steps,
