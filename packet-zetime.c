@@ -29,6 +29,7 @@ static int hf_zetime_payload = -1;
 static int hf_zetime_payload_unkown = -1;
 static int hf_zetime_end = -1;
 
+static int hf_zetime_error_code = -1;
 static int hf_zetime_version_type = -1;
 static int hf_zetime_version_info = -1;
 static int hf_zetime_packet_number = -1;
@@ -53,7 +54,7 @@ static int hf_zetime_timezone_hour = -1;
 static int hf_zetime_timezone_minute = -1;
 
 #define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
-    XXX(ZETIME_PDU_TYPE_RECEIPT, 0x01, "Receipt") \
+    XXX(ZETIME_PDU_TYPE_RESPOND, 0x01, "Respond") \
     XXX(ZETIME_PDU_TYPE_SERIALNUMBER, 0x02, "Serial Number") \
     XXX(ZETIME_PDU_TYPE_DEVICE_VERSION, 0x03, "Device Version") \
     XXX(ZETIME_PDU_TYPE_DATE_TIME, 0x04, "Time Synchronization") \
@@ -89,6 +90,13 @@ VALUE_STRING_ARRAY(zetime_action);
 VALUE_STRING_ENUM(zetime_version_type);
 VALUE_STRING_ARRAY(zetime_version_type);
 
+#define zetime_error_code_VALUE_STRING_LIST(XXX)    \
+    XXX(ZETIME_ERROR_CODE_NONE, 0x00, "no error") \
+    XXX(ZETIME_ERROR_CODE_GENERAL, 0x01, "general error") \
+
+VALUE_STRING_ENUM(zetime_error_code);
+VALUE_STRING_ARRAY(zetime_error_code);
+
 static gint
 dissect_preamble(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
 {
@@ -109,24 +117,34 @@ dissect_end(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
 }
 
 static gint
-dissect_pdu_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
-                 proto_item *ti, packet_info *pinfo, guint *valueRet)
+dissect_pdu_type_ex(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
+                    proto_item *ti, packet_info *pinfo, guint *valueRet)
 {
     const gint len = 1;
     guint value = 0;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_pdu_type, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN, &value);
-    proto_item_append_text(ti, ", %s", val_to_str(value,
-                           zetime_pdu_type,
-                           "UNKNOWN PDU TYPE (0x%02x)"));
-    col_add_fstr(pinfo->cinfo, COL_INFO, "%s", val_to_str(value,
-                 zetime_pdu_type,
-                 "UNKNOWN PDU TYPE (0x%02x)"));
+    if (ti) {
+        proto_item_append_text(ti, ", %s", val_to_str(value,
+                               zetime_pdu_type,
+                               "UNKNOWN PDU TYPE (0x%02x)"));
+    }
+    if (pinfo) {
+        col_add_fstr(pinfo->cinfo, COL_INFO, "%s", val_to_str(value,
+                     zetime_pdu_type,
+                     "UNKNOWN PDU TYPE (0x%02x)"));
+    }
 
     if (valueRet) {
         *valueRet = value;
     }
     return len;
+}
+
+static gint
+dissect_pdu_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
+{
+    return dissect_pdu_type_ex(tvb, offset, zetime_tree, NULL, NULL, NULL);
 }
 
 static gint
@@ -159,6 +177,14 @@ dissect_payload_length(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
     if (payload_len) {
         *payload_len = plen;
     }
+    return len;
+}
+
+static gint
+dissect_error_code(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_error_code, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
@@ -331,6 +357,16 @@ dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
+dissect_respond_confirmation(tvbuff_t *tvb, packet_info *pinfo _U_,
+                proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_pdu_type(tvb, offset, tree);
+    offset += dissect_error_code(tvb, offset, tree);
+    return offset;
+}
+
+static guint
 dissect_request(tvbuff_t *tvb, packet_info *pinfo _U_,
                 proto_tree *tree, void *data _U_, guint expected_len)
 {
@@ -445,7 +481,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
     gint offset = 0;
 
     offset += dissect_preamble(tvb, offset, zetime_tree);
-    offset += dissect_pdu_type(tvb, offset, zetime_tree, ti, pinfo, &pdu_type);
+    offset += dissect_pdu_type_ex(tvb, offset, zetime_tree, ti, pinfo, &pdu_type);
     offset += dissect_action(tvb, offset, zetime_tree, ti, pinfo, &action);
     offset += dissect_payload_length(tvb, offset, zetime_tree, &payload_len);
 
@@ -455,8 +491,16 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         tvbuff_t *const payload_tvb = tvb_new_subset_length_caplen(tvb, offset, 
                                       fragmented ? -1 : payload_len, payload_len);
         switch (pdu_type) {
-        case ZETIME_PDU_TYPE_RECEIPT:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+        case ZETIME_PDU_TYPE_RESPOND:
+            switch (action) {
+            case ZETIME_ACTION_CONFIRMATION:
+                offset += dissect_respond_confirmation(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_SERIALNUMBER:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -480,7 +524,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
             case ZETIME_ACTION_SEND:
                 offset += dissect_date_time_send(payload_tvb, pinfo, zetime_tree, data);
                 break;
-            case ZETIME_ACTION_CONFIRMATION: // confirmation as RECEIPT (0x01)
+            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
             default:
                 // unkown action
                 offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -694,6 +738,12 @@ proto_register_zetime(void)
             { "END", "zetime.end",
             FT_NONE, BASE_NONE,
             NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_error_code,
+            { "Error Code", "zetime.error_code",
+            FT_UINT8, BASE_DEC_HEX,
+            VALS(zetime_error_code), 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_version_type,
