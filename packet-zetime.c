@@ -43,11 +43,20 @@ static int hf_zetime_available_steps = -1;
 static int hf_zetime_available_sleep = -1;
 static int hf_zetime_available_heart_rate = -1;
 
+static int hf_zetime_datetime_year = -1;
+static int hf_zetime_datetime_month = -1;
+static int hf_zetime_datetime_day = -1;
+static int hf_zetime_datetime_hour = -1;
+static int hf_zetime_datetime_minute = -1;
+static int hf_zetime_datetime_second = -1;
+static int hf_zetime_timezone_hour = -1;
+static int hf_zetime_timezone_minute = -1;
+
 #define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
     XXX(ZETIME_PDU_TYPE_RECEIPT, 0x01, "Receipt") \
     XXX(ZETIME_PDU_TYPE_SERIALNUMBER, 0x02, "Serial Number") \
     XXX(ZETIME_PDU_TYPE_DEVICE_VERSION, 0x03, "Device Version") \
-    XXX(ZETIME_PDU_TYPE_TIMESYNC, 0x04, "Time Synchronization") \
+    XXX(ZETIME_PDU_TYPE_DATE_TIME, 0x04, "Time Synchronization") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0b, 0x0b, "UNKNOWN 0x0b") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0c, 0x0c, "UNKNOWN 0x0c") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x18, 0x18, "UNKNOWN 0x18") \
@@ -170,6 +179,70 @@ dissect_version_info(tvbuff_t *tvb, gint offset, proto_tree *tree)
 }
 
 static gint
+dissect_datetime_year(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 2;
+    proto_tree_add_item(tree, hf_zetime_datetime_year, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_datetime_month(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_datetime_month, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_datetime_day(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_datetime_day, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_datetime_hour(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_datetime_hour, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_datetime_minute(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_datetime_minute, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_datetime_second(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_datetime_second, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_timezone_hour(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_timezone_hour, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_timezone_minute(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_timezone_minute, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
 dissect_packet_number(tvbuff_t *tvb, gint offset, proto_tree *tree)
 {
     const gint len = 2;
@@ -286,6 +359,25 @@ dissect_device_version_response(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
+dissect_date_time_send(tvbuff_t *tvb, packet_info *pinfo _U_,
+                       proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_datetime_year(tvb, offset, tree);
+    offset += dissect_datetime_month(tvb, offset, tree);
+    offset += dissect_datetime_day(tvb, offset, tree);
+    offset += dissect_datetime_hour(tvb, offset, tree);
+    offset += dissect_datetime_minute(tvb, offset, tree);
+    offset += dissect_datetime_second(tvb, offset, tree);
+    // unknown 3 byte data
+    offset += dissect_payload_unknown(tvb_new_subset_length(tvb, offset, 3),
+                                      pinfo, tree, data);
+    offset += dissect_timezone_hour(tvb, offset, tree);
+    offset += dissect_timezone_minute(tvb, offset, tree);
+    return offset;
+}
+
+static guint
 dissect_available_data_response(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
 {
@@ -383,8 +475,17 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
                 break;
             }
             break;
-        case ZETIME_PDU_TYPE_TIMESYNC:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+        case ZETIME_PDU_TYPE_DATE_TIME:
+            switch (action) {
+            case ZETIME_ACTION_SEND:
+                offset += dissect_date_time_send(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            case ZETIME_ACTION_CONFIRMATION: // confirmation as RECEIPT (0x01)
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_UNKNOWN_0x0b:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -664,6 +765,54 @@ proto_register_zetime(void)
         { &hf_zetime_available_heart_rate,
             { "Sleep", "zetime.available.heart_rate",
             FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_datetime_year,
+            { "Year", "zetime.datetime.year",
+            FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_datetime_month,
+            { "Month", "zetime.datetime.month",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_datetime_day,
+            { "Day of Month", "zetime.datetime.day",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_datetime_hour,
+            { "Hour", "zetime.datetime.hour",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_datetime_minute,
+            { "Minute", "zetime.datetime.minute",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_datetime_second,
+            { "Second", "zetime.datetime.second",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_timezone_hour,
+            { "TimeZone Hour", "zetime.timezone.hour",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_timezone_minute,
+            { "TimeZone Minute", "zetime.timezone.minute",
+            FT_UINT8, BASE_DEC,
             NULL, 0x0,
             NULL, HFILL }
         },
