@@ -64,7 +64,7 @@ static int hf_zetime_timezone_minute = -1;
     XXX(ZETIME_PDU_TYPE_AVAILABLE_DATA, 0x52, "Available Data") \
     XXX(ZETIME_PDU_TYPE_DELETE_STEP_COUNT, 0x53, "Step Count Deletion") \
     XXX(ZETIME_PDU_TYPE_GET_STEP_COUNT, 0x54, "Step Count") \
-    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x5a, 0x5a, "UNKNOWN 0x5a") \
+    XXX(ZETIME_PDU_TYPE_DELETE_HEARTRATE_DATA, 0x5a, "Heart Rate Data Deletion") \
     XXX(ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA, 0x61, "Heart Rate Exdata") \
     XXX(ZETIME_PDU_TYPE_CALMONVIEW, 0x98, "Calendar Month View") \
     XXX(ZETIME_PDU_TYPE_CALDAYVIEW, 0x99, "Calendar Day View") \
@@ -580,8 +580,17 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
                 break;
             }
             break;
-        case ZETIME_PDU_TYPE_UNKNOWN_0x5a:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+        case ZETIME_PDU_TYPE_DELETE_HEARTRATE_DATA:
+            switch (action) {
+            case ZETIME_ACTION_SEND:
+                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
+                break;
+            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA:
             switch (action) {
