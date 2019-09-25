@@ -357,6 +357,15 @@ dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
+dissect_payload_zeros(tvbuff_t *tvb, packet_info *pinfo _U_,
+                proto_tree *tree, void *data _U_, guint expected_len)
+{
+    // payload should contain only zeros
+    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, expected_len, ENC_NA);
+    return expected_len;
+}
+
+static guint
 dissect_respond_confirmation(tvbuff_t *tvb, packet_info *pinfo _U_,
                 proto_tree *tree, void *data _U_)
 {
@@ -364,15 +373,6 @@ dissect_respond_confirmation(tvbuff_t *tvb, packet_info *pinfo _U_,
     offset += dissect_pdu_type(tvb, offset, tree);
     offset += dissect_error_code(tvb, offset, tree);
     return offset;
-}
-
-static guint
-dissect_request(tvbuff_t *tvb, packet_info *pinfo _U_,
-                proto_tree *tree, void *data _U_, guint expected_len)
-{
-    // payload should contain only zeros
-    proto_tree_add_item(tree, hf_zetime_payload, tvb, 0, expected_len, ENC_NA);
-    return expected_len;
 }
 
 static guint
@@ -543,7 +543,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_AVAILABLE_DATA:
             switch (action) {
             case ZETIME_ACTION_REQUEST:
-                offset += dissect_request(payload_tvb, pinfo, zetime_tree, data, 1);
+                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
                 break;
             case ZETIME_ACTION_RESPONSE:
                 offset += dissect_available_data_response(payload_tvb, pinfo, zetime_tree, data);
@@ -557,7 +557,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_DELETE_STEP_COUNT:
             switch (action) {
             case ZETIME_ACTION_SEND:
-                offset += dissect_request(payload_tvb, pinfo, zetime_tree, data, 1);
+                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
                 break;
             case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
             default:
@@ -569,7 +569,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_GET_STEP_COUNT:
             switch (action) {
             case ZETIME_ACTION_REQUEST:
-                offset += dissect_request(payload_tvb, pinfo, zetime_tree, data, 2);
+                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 2);
                 break;
             case ZETIME_ACTION_RESPONSE:
                 offset += dissect_get_step_count_response(payload_tvb, pinfo, zetime_tree, data);
@@ -586,7 +586,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA:
             switch (action) {
             case ZETIME_ACTION_REQUEST:
-                offset += dissect_request(payload_tvb, pinfo, zetime_tree, data, 1);
+                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
                 break;
             case ZETIME_ACTION_RESPONSE:
                 offset += dissect_get_heartrate_exdata_response(payload_tvb, pinfo, zetime_tree, data);
