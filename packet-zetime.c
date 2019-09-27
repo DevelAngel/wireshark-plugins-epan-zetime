@@ -450,9 +450,11 @@ dissect_calendar_event_title(tvbuff_t *tvb, gint offset, proto_tree *tree)
 }
 
 static guint
-dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
-                                proto_tree *tree, void *data _U_)
+dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo,
+                        proto_tree *tree, void *data _U_)
 {
+    col_append_str(pinfo->cinfo, COL_INFO, " [UNKNOWN PAYLOAD]");
+
     proto_tree_add_item(tree, hf_zetime_payload_unkown, tvb, 0, -1, ENC_NA);
     return tvb_captured_length(tvb);
 }
