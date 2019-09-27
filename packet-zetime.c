@@ -33,6 +33,7 @@ static int hf_zetime_ack = -1;
 static int hf_zetime_error_code = -1;
 static int hf_zetime_version_type = -1;
 static int hf_zetime_version_info = -1;
+static int hf_zetime_battery_power_level = -1;
 static int hf_zetime_packet_number = -1;
 static int hf_zetime_timestamp = -1;
 static int hf_zetime_steps = -1;
@@ -67,6 +68,7 @@ static int hf_zetime_calendar_event_title = -1;
     XXX(ZETIME_PDU_TYPE_WATCH_ID, 0x02, "Watch ID") \
     XXX(ZETIME_PDU_TYPE_DEVICE_VERSION, 0x03, "Device Version") \
     XXX(ZETIME_PDU_TYPE_DATE_TIME, 0x04, "Time Synchronization") \
+    XXX(ZETIME_PDU_TYPE_BATTERY_POWER, 0x08, "Battery Power") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0b, 0x0b, "UNKNOWN 0x0b") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0c, 0x0c, "UNKNOWN 0x0c") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x18, 0x18, "UNKNOWN 0x18") \
@@ -232,6 +234,17 @@ dissect_version_info(tvbuff_t *tvb, gint offset, proto_tree *tree)
 {
     const guint len = tvb_captured_length_remaining(tvb, offset);
     proto_tree_add_item(tree, hf_zetime_version_info, tvb, offset, len, ENC_NA);
+    return len;
+}
+
+static gint
+dissect_battery_power_level(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    const guint levelLow = 25; // TODO: proto setting
+    guint level = 0;
+    proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_battery_power_level, tvb, offset, len, ENC_LITTLE_ENDIAN, &level);
+    proto_item_append_text(ti, " (%s)", (level <= levelLow ? "low" : "normal"));
     return len;
 }
 
@@ -483,6 +496,15 @@ dissect_device_version_response(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
+dissect_battery_power_response(tvbuff_t *tvb, packet_info *pinfo _U_,
+                       proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_battery_power_level(tvb, offset, tree);
+    return offset;
+}
+
+static guint
 dissect_date_time_send(tvbuff_t *tvb, packet_info *pinfo _U_,
                        proto_tree *tree, void *data _U_)
 {
@@ -621,6 +643,20 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 offset += dissect_date_time_send(payload_tvb, pinfo, zetime_tree, data);
                 break;
             case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
+            break;
+        case ZETIME_PDU_TYPE_BATTERY_POWER:
+            switch (action) {
+            case ZETIME_ACTION_REQUEST:
+                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
+                break;
+            case ZETIME_ACTION_RESPONSE:
+                offset += dissect_battery_power_response(payload_tvb, pinfo, zetime_tree, data);
+                break;
             default:
                 // unkown action
                 offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -913,6 +949,12 @@ proto_register_zetime(void)
             { "Version Type", "zetime.version_info",
             FT_STRING, STR_ASCII,
             NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_battery_power_level,
+            { "Level", "zetime.battery_power.level",
+            FT_UINT8, BASE_DEC|BASE_UNIT_STRING,
+            &units_percent, 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_packet_number,
