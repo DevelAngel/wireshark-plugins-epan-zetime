@@ -175,12 +175,6 @@ dissect_pdu_type_ex(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
 }
 
 static gint
-dissect_pdu_type(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
-{
-    return dissect_pdu_type_ex(tvb, offset, zetime_tree, NULL, NULL, NULL);
-}
-
-static gint
 dissect_action(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
                  proto_item *ti, packet_info *pinfo _U_, guint *valueRet)
 {
@@ -473,7 +467,12 @@ dissect_respond_confirmation(tvbuff_t *tvb, packet_info *pinfo _U_,
                 proto_tree *tree, void *data _U_)
 {
     gint offset = 0;
-    offset += dissect_pdu_type(tvb, offset, tree);
+
+    // Describe in info column which message was confirmed (or not)
+    col_clear(pinfo->cinfo, COL_INFO);
+    offset += dissect_pdu_type_ex(tvb, offset, tree, NULL, pinfo, NULL);
+    col_append_str(pinfo->cinfo, COL_INFO, " Confirmation");
+
     offset += dissect_error_code(tvb, offset, tree);
     return offset;
 }
