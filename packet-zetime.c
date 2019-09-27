@@ -28,6 +28,7 @@ static int hf_zetime_payload_length = -1;
 static int hf_zetime_payload = -1;
 static int hf_zetime_payload_unkown = -1;
 static int hf_zetime_end = -1;
+static int hf_zetime_ack = -1;
 
 static int hf_zetime_error_code = -1;
 static int hf_zetime_version_type = -1;
@@ -135,6 +136,15 @@ dissect_end(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
     proto_tree_add_item(zetime_tree, hf_zetime_end, tvb, offset,
                         ZETIME_CMD_END_LEN, ENC_NA);
     return ZETIME_CMD_END_LEN;
+}
+
+static gint
+dissect_ack(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(zetime_tree, hf_zetime_ack, tvb, offset,
+                        len, ENC_NA);
+    return len;
 }
 
 static gint
@@ -548,12 +558,9 @@ dissect_push_calendar_day_send(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static int
-dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
-               void *data _U_)
+dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
+                   proto_item *ti, void *data _U_)
 {
-    col_set_str(pinfo->cinfo, COL_PROTOCOL, "ZeTime");
-    col_clear(pinfo->cinfo, COL_INFO);
-
     /* General message composition
      *
      * +----------+----------+----------+----------------+----------+-------+
@@ -563,10 +570,6 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
      * +----------+----------+----------+----------------+----------+-------+
      *
      */
-
-    proto_item *ti = proto_tree_add_item(tree, proto_zetime, tvb, 0, -1,
-                                         ENC_NA);
-    proto_tree *zetime_tree = proto_item_add_subtree(ti, ett_zetime);
 
     guint pdu_type = 0;
     guint action = 0;
@@ -731,6 +734,34 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
 }
 
 static int
+dissect_zetime_ack(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+                   proto_item *ti, void *data _U_)
+{
+    col_add_fstr(pinfo->cinfo, COL_INFO, "%s", "Ack");
+    proto_item_append_text(ti, ", %s", "Ack");
+
+    gint offset = 0;
+    offset += dissect_ack(tvb, offset, tree);
+    return offset;
+}
+
+static int
+dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+               void *data)
+{
+    col_set_str(pinfo->cinfo, COL_PROTOCOL, "ZeTime");
+    col_clear(pinfo->cinfo, COL_INFO);
+
+    proto_item *ti = proto_tree_add_item(tree, proto_zetime, tvb, 0, -1,
+                                         ENC_NA);
+    proto_tree *zetime_tree = proto_item_add_subtree(ti, ett_zetime);
+
+    return (tvb_reported_length(tvb) != 1) ?
+                dissect_zetime_msg(tvb, pinfo, zetime_tree, ti, data) :
+                dissect_zetime_ack(tvb, pinfo, zetime_tree, ti, data);
+}
+
+static int
 dissect_zetime_uuid16_write(tvbuff_t *tvb, packet_info *pinfo,
                           proto_tree *tree _U_, void *data _U_)
 {
@@ -856,6 +887,12 @@ proto_register_zetime(void)
         },
         { &hf_zetime_end,
             { "END", "zetime.end",
+            FT_NONE, BASE_NONE,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_ack,
+            { "ACK", "zetime.ack",
             FT_NONE, BASE_NONE,
             NULL, 0x0,
             NULL, HFILL }
