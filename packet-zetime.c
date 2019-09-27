@@ -63,7 +63,7 @@ static int hf_zetime_calendar_event_title = -1;
 
 #define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
     XXX(ZETIME_PDU_TYPE_RESPOND, 0x01, "Respond") \
-    XXX(ZETIME_PDU_TYPE_SERIALNUMBER, 0x02, "Serial Number") \
+    XXX(ZETIME_PDU_TYPE_WATCH_ID, 0x02, "Watch ID") \
     XXX(ZETIME_PDU_TYPE_DEVICE_VERSION, 0x03, "Device Version") \
     XXX(ZETIME_PDU_TYPE_DATE_TIME, 0x04, "Time Synchronization") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0b, 0x0b, "UNKNOWN 0x0b") \
@@ -595,7 +595,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
                 break;
             }
             break;
-        case ZETIME_PDU_TYPE_SERIALNUMBER:
+        case ZETIME_PDU_TYPE_WATCH_ID:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
         case ZETIME_PDU_TYPE_DEVICE_VERSION:
