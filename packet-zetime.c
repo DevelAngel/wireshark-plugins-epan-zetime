@@ -53,6 +53,14 @@ static int hf_zetime_datetime_second = -1;
 static int hf_zetime_timezone_hour = -1;
 static int hf_zetime_timezone_minute = -1;
 
+static int hf_zetime_calendar_event_type = -1;
+static int hf_zetime_calendar_event_year = -1;
+static int hf_zetime_calendar_event_month = -1;
+static int hf_zetime_calendar_event_day = -1;
+static int hf_zetime_calendar_event_hour = -1;
+static int hf_zetime_calendar_event_minute = -1;
+static int hf_zetime_calendar_event_title = -1;
+
 #define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
     XXX(ZETIME_PDU_TYPE_RESPOND, 0x01, "Respond") \
     XXX(ZETIME_PDU_TYPE_SERIALNUMBER, 0x02, "Serial Number") \
@@ -67,7 +75,7 @@ static int hf_zetime_timezone_minute = -1;
     XXX(ZETIME_PDU_TYPE_DELETE_HEARTRATE_DATA, 0x5a, "Heart Rate Data Deletion") \
     XXX(ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA, 0x61, "Heart Rate Exdata") \
     XXX(ZETIME_PDU_TYPE_CALMONVIEW, 0x98, "Calendar Month View") \
-    XXX(ZETIME_PDU_TYPE_CALDAYVIEW, 0x99, "Calendar Day View") \
+    XXX(ZETIME_PDU_TYPE_PUSH_CALENDAR_DAY, 0x99, "Push Calendar Day") \
     XXX(ZETIME_PDU_TYPE_UNKNOWN_0xe2, 0xe2, "UNKNOWN 0xe2")
 
 VALUE_STRING_ENUM(zetime_pdu_type);
@@ -96,6 +104,19 @@ VALUE_STRING_ARRAY(zetime_version_type);
 
 VALUE_STRING_ENUM(zetime_error_code);
 VALUE_STRING_ARRAY(zetime_error_code);
+
+/* ZeTime App btsnoop:
+ * push calendar day with payload = 0x04000000000000000000
+ * which has calendar event type = 0x04
+ */
+#define zetime_calendar_event_type_VALUE_STRING_LIST(XXX)    \
+    XXX(ZETIME_CALENDAR_EVENT_TYPE_UNKNOWN, 0x01, "unknown") \
+    XXX(ZETIME_CALENDAR_EVENT_TYPE_SUNRISE, 0x02, "sunrise") \
+    XXX(ZETIME_CALENDAR_EVENT_TYPE_SUNSET, 0x03, "sunset") \
+    XXX(ZETIME_CALENDAR_EVENT_TYPE_TEST, 0x04, "test") \
+
+VALUE_STRING_ENUM(zetime_calendar_event_type);
+VALUE_STRING_ARRAY(zetime_calendar_event_type);
 
 static gint
 dissect_preamble(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
@@ -348,6 +369,63 @@ dissect_available_heart_rate(tvbuff_t *tvb, gint offset, proto_tree *tree)
     return len;
 }
 
+static gint
+dissect_calendar_event_type(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_calendar_event_type, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_calendar_event_year(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 2;
+    proto_tree_add_item(tree, hf_zetime_calendar_event_year, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_calendar_event_month(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_calendar_event_month, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_calendar_event_day(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1;
+    proto_tree_add_item(tree, hf_zetime_calendar_event_day, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_calendar_event_hour(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 2;
+    proto_tree_add_item(tree, hf_zetime_calendar_event_hour, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_calendar_event_minute(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 2;
+    proto_tree_add_item(tree, hf_zetime_calendar_event_minute, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_calendar_event_title(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const gint len = 1; // length of string length field
+    const guint8 strlen = tvb_get_guint8(tvb, offset);
+    proto_tree_add_item(tree, hf_zetime_calendar_event_title, tvb, offset, len, ENC_LITTLE_ENDIAN|ENC_UTF_8);
+    return len + strlen;
+}
+
 static guint
 dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
@@ -451,6 +529,21 @@ dissect_get_heartrate_exdata_response(tvbuff_t *tvb, packet_info *pinfo _U_,
         offset += dissect_timestamp(tvb, offset, tree);
         offset += dissect_heart_rate(tvb, offset, tree);
     } while(offset < tvb_captured_length(tvb));
+    return offset;
+}
+
+static guint
+dissect_push_calendar_day_send(tvbuff_t *tvb, packet_info *pinfo _U_,
+                               proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_calendar_event_type(tvb, offset, tree);
+    offset += dissect_calendar_event_year(tvb, offset, tree);
+    offset += dissect_calendar_event_month(tvb, offset, tree);
+    offset += dissect_calendar_event_day(tvb, offset, tree);
+    offset += dissect_calendar_event_hour(tvb, offset, tree);
+    offset += dissect_calendar_event_minute(tvb, offset, tree);
+    offset += dissect_calendar_event_title(tvb, offset, tree);
     return offset;
 }
 
@@ -609,8 +702,17 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree _U_,
         case ZETIME_PDU_TYPE_CALMONVIEW:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
-        case ZETIME_PDU_TYPE_CALDAYVIEW:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+        case ZETIME_PDU_TYPE_PUSH_CALENDAR_DAY:
+            switch (action) {
+            case ZETIME_ACTION_SEND:
+                offset += dissect_push_calendar_day_send(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_UNKNOWN_0xe2:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -881,6 +983,48 @@ proto_register_zetime(void)
         { &hf_zetime_timezone_minute,
             { "TimeZone Minute", "zetime.timezone.minute",
             FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_calendar_event_type,
+            { "Calendar Event Type", "zetime.calendar_event.type",
+            FT_UINT8, BASE_DEC,
+            VALS(zetime_calendar_event_type), 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_calendar_event_year,
+            { "Year", "zetime.calendar_event.year",
+            FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_calendar_event_month,
+            { "Month", "zetime.calendar_event.month",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_calendar_event_day,
+            { "Day of Month", "zetime.calendar_event.day",
+            FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_calendar_event_hour,
+            { "Hour", "zetime.calendar_event.hour",
+            FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_calendar_event_minute,
+            { "Minute", "zetime.calendar_event.minute",
+            FT_UINT16, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_calendar_event_title,
+            { "Title", "zetime.calendar_event.title",
+            FT_UINT_STRING, STR_UNICODE,
             NULL, 0x0,
             NULL, HFILL }
         },
