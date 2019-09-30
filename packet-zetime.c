@@ -70,17 +70,12 @@ static int hf_zetime_calendar_event_title = -1;
     XXX(ZETIME_PDU_TYPE_DEVICE_VERSION, 0x03, "Device Version") \
     XXX(ZETIME_PDU_TYPE_DATE_TIME, 0x04, "Time Synchronization") \
     XXX(ZETIME_PDU_TYPE_BATTERY_POWER, 0x08, "Battery Power") \
-    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0b, 0x0b, "UNKNOWN 0x0b") \
-    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x0c, 0x0c, "UNKNOWN 0x0c") \
-    XXX(ZETIME_PDU_TYPE_UNKNOWN_0x18, 0x18, "UNKNOWN 0x18") \
     XXX(ZETIME_PDU_TYPE_AVAILABLE_DATA, 0x52, "Available Data") \
     XXX(ZETIME_PDU_TYPE_DELETE_STEP_COUNT, 0x53, "Step Count Deletion") \
     XXX(ZETIME_PDU_TYPE_GET_STEP_COUNT, 0x54, "Step Count") \
     XXX(ZETIME_PDU_TYPE_DELETE_HEARTRATE_DATA, 0x5a, "Heart Rate Data Deletion") \
     XXX(ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA, 0x61, "Heart Rate Exdata") \
-    XXX(ZETIME_PDU_TYPE_CALMONVIEW, 0x98, "Calendar Month View") \
     XXX(ZETIME_PDU_TYPE_PUSH_CALENDAR_DAY, 0x99, "Push Calendar Day") \
-    XXX(ZETIME_PDU_TYPE_UNKNOWN_0xe2, 0xe2, "UNKNOWN 0xe2")
 
 VALUE_STRING_ENUM(zetime_pdu_type);
 VALUE_STRING_ARRAY(zetime_pdu_type);
@@ -693,15 +688,6 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             }
             break;
-        case ZETIME_PDU_TYPE_UNKNOWN_0x0b:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
-            break;
-        case ZETIME_PDU_TYPE_UNKNOWN_0x0c:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
-            break;
-        case ZETIME_PDU_TYPE_UNKNOWN_0x18:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
-            break;
         case ZETIME_PDU_TYPE_AVAILABLE_DATA:
             switch (action) {
             case ZETIME_ACTION_REQUEST:
@@ -768,9 +754,6 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             }
             break;
-        case ZETIME_PDU_TYPE_CALMONVIEW:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
-            break;
         case ZETIME_PDU_TYPE_PUSH_CALENDAR_DAY:
             switch (action) {
             case ZETIME_ACTION_SEND:
@@ -782,9 +765,6 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
-            break;
-        case ZETIME_PDU_TYPE_UNKNOWN_0xe2:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
             break;
         default:
             offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
