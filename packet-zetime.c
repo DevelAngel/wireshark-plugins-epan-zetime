@@ -31,6 +31,7 @@ static int hf_zetime_end = -1;
 static int hf_zetime_ack = -1;
 
 static int hf_zetime_error_code = -1;
+static int hf_zetime_watch_id = -1;
 static int hf_zetime_version_type = -1;
 static int hf_zetime_version_info = -1;
 static int hf_zetime_battery_power_level = -1;
@@ -212,6 +213,14 @@ dissect_error_code(tvbuff_t *tvb, gint offset, proto_tree *tree)
 {
     const gint len = 1;
     proto_tree_add_item(tree, hf_zetime_error_code, tvb, offset, len, ENC_LITTLE_ENDIAN);
+    return len;
+}
+
+static gint
+dissect_watch_id(tvbuff_t *tvb, gint offset, proto_tree *tree)
+{
+    const guint len = tvb_captured_length_remaining(tvb, offset);
+    proto_tree_add_item(tree, hf_zetime_watch_id, tvb, offset, len, ENC_NA);
     return len;
 }
 
@@ -478,6 +487,15 @@ dissect_respond_confirmation(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
+dissect_watch_id_response(tvbuff_t *tvb, packet_info *pinfo _U_,
+                               proto_tree *tree, void *data _U_)
+{
+    gint offset = 0;
+    offset += dissect_watch_id(tvb, offset, tree);
+    return offset;
+}
+
+static guint
 dissect_device_version_request(tvbuff_t *tvb, packet_info *pinfo _U_,
                                proto_tree *tree, void *data _U_)
 {
@@ -622,7 +640,18 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
             }
             break;
         case ZETIME_PDU_TYPE_WATCH_ID:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            switch (action) {
+            case ZETIME_ACTION_REQUEST:
+                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
+                break;
+            case ZETIME_ACTION_RESPONSE:
+                offset += dissect_watch_id_response(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
             break;
         case ZETIME_PDU_TYPE_DEVICE_VERSION:
             switch (action) {
@@ -938,6 +967,12 @@ proto_register_zetime(void)
             { "Error Code", "zetime.error_code",
             FT_UINT8, BASE_DEC_HEX,
             VALS(zetime_error_code), 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_watch_id,
+            { "Watch ID (S/N)", "zetime.watch_id",
+            FT_STRING, STR_ASCII,
+            NULL, 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_version_type,
