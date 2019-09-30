@@ -117,39 +117,39 @@ VALUE_STRING_ARRAY(zetime_error_code);
 VALUE_STRING_ENUM(zetime_calendar_event_type);
 VALUE_STRING_ARRAY(zetime_calendar_event_type);
 
-static gint
-dissect_preamble(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
+static guint
+dissect_preamble(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(zetime_tree, hf_zetime_preamble, tvb, offset, len,
                         ENC_NA);
     return len;
 }
 
-#define ZETIME_CMD_END_LEN 1
+#define ZETIME_CMD_END_LEN ((guint) 1)
 
-static gint
-dissect_end(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
+static guint
+dissect_end(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree)
 {
     proto_tree_add_item(zetime_tree, hf_zetime_end, tvb, offset,
                         ZETIME_CMD_END_LEN, ENC_NA);
     return ZETIME_CMD_END_LEN;
 }
 
-static gint
-dissect_ack(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree)
+static guint
+dissect_ack(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(zetime_tree, hf_zetime_ack, tvb, offset,
                         len, ENC_NA);
     return len;
 }
 
-static gint
-dissect_pdu_type_ex(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
+static guint
+dissect_pdu_type_ex(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree,
                     proto_item *ti, packet_info *pinfo, guint *valueRet)
 {
-    const gint len = 1;
+    const guint len = 1;
     guint value = 0;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_pdu_type, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN, &value);
@@ -170,11 +170,11 @@ dissect_pdu_type_ex(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
     return len;
 }
 
-static gint
-dissect_action(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
+static guint
+dissect_action(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree,
                  proto_item *ti, packet_info *pinfo _U_, guint *valueRet)
 {
-    const gint len = 1;
+    const guint len = 1;
     guint value = 0;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_action, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN, &value);
@@ -188,57 +188,53 @@ dissect_action(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
     return len;
 }
 
-static gint
-dissect_payload_length(tvbuff_t *tvb, gint offset, proto_tree *zetime_tree,
-                       gint *payload_len)
+static guint
+dissect_payload_length(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree,
+                       guint *payload_len)
 {
-    const gint len = 2;
-    guint plen = 0;
+    const guint len = 2;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_payload_length, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN,
-                                 &plen);
-    if (payload_len) {
-        *payload_len = plen;
-    }
+                                 payload_len);
     return len;
 }
 
-static gint
-dissect_error_code(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_error_code(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_error_code, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_watch_id(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_watch_id(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
     const guint len = tvb_captured_length_remaining(tvb, offset);
     proto_tree_add_item(tree, hf_zetime_watch_id, tvb, offset, len, ENC_NA);
     return len;
 }
 
-static gint
-dissect_version_type(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_version_type(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_version_type, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_version_info(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_version_info(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
     const guint len = tvb_captured_length_remaining(tvb, offset);
     proto_tree_add_item(tree, hf_zetime_version_info, tvb, offset, len, ENC_NA);
     return len;
 }
 
-static gint
-dissect_battery_power_level(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_battery_power_level(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     const guint levelLow = 25; // TODO: proto setting
     guint level = 0;
     proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_battery_power_level, tvb, offset, len, ENC_LITTLE_ENDIAN, &level);
@@ -246,202 +242,202 @@ dissect_battery_power_level(tvbuff_t *tvb, gint offset, proto_tree *tree)
     return len;
 }
 
-static gint
-dissect_datetime_year(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_datetime_year(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 2;
+    const guint len = 2;
     proto_tree_add_item(tree, hf_zetime_datetime_year, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_datetime_month(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_datetime_month(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_datetime_month, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_datetime_day(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_datetime_day(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_datetime_day, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_datetime_hour(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_datetime_hour(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_datetime_hour, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_datetime_minute(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_datetime_minute(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_datetime_minute, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_datetime_second(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_datetime_second(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_datetime_second, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_timezone_hour(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_timezone_hour(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_timezone_hour, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_timezone_minute(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_timezone_minute(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_timezone_minute, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_packet_number(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_packet_number(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 2;
+    const guint len = 2;
     proto_tree_add_item(tree, hf_zetime_packet_number, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_timestamp(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_timestamp(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 4;
+    const guint len = 4;
     proto_tree_add_item(tree, hf_zetime_timestamp, tvb, offset, len, ENC_LITTLE_ENDIAN | ENC_TIME_SECS);
     return len;
 }
 
-static gint
-dissect_steps(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_steps(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 4;
+    const guint len = 4;
     proto_tree_add_item(tree, hf_zetime_steps, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_calories_burnt(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_calories_burnt(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 4;
+    const guint len = 4;
     proto_tree_add_item(tree, hf_zetime_calories_burnt, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_meters_walked(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_meters_walked(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 4;
+    const guint len = 4;
     proto_tree_add_item(tree, hf_zetime_meters_walked, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_activity_minutes(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_activity_minutes(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 4;
+    const guint len = 4;
     proto_tree_add_item(tree, hf_zetime_activity_minutes, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_heart_rate(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_heart_rate(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_heart_rate, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_available_steps(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_available_steps(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 2;
+    const guint len = 2;
     proto_tree_add_item(tree, hf_zetime_available_steps, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_available_sleep(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_available_sleep(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 2;
+    const guint len = 2;
     proto_tree_add_item(tree, hf_zetime_available_sleep, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_available_heart_rate(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_available_heart_rate(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 2;
+    const guint len = 2;
     proto_tree_add_item(tree, hf_zetime_available_heart_rate, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_calendar_event_type(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_calendar_event_type(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_calendar_event_type, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_calendar_event_year(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_calendar_event_year(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 2;
+    const guint len = 2;
     proto_tree_add_item(tree, hf_zetime_calendar_event_year, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_calendar_event_month(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_calendar_event_month(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_calendar_event_month, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_calendar_event_day(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_calendar_event_day(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1;
+    const guint len = 1;
     proto_tree_add_item(tree, hf_zetime_calendar_event_day, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_calendar_event_hour(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_calendar_event_hour(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 2;
+    const guint len = 2;
     proto_tree_add_item(tree, hf_zetime_calendar_event_hour, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_calendar_event_minute(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_calendar_event_minute(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 2;
+    const guint len = 2;
     proto_tree_add_item(tree, hf_zetime_calendar_event_minute, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
-static gint
-dissect_calendar_event_title(tvbuff_t *tvb, gint offset, proto_tree *tree)
+static guint
+dissect_calendar_event_title(tvbuff_t *tvb, guint offset, proto_tree *tree)
 {
-    const gint len = 1; // length of string length field
+    const guint len = 1; // length of string length field
     const guint8 strlen = tvb_get_guint8(tvb, offset);
     proto_tree_add_item(tree, hf_zetime_calendar_event_title, tvb, offset, len, ENC_LITTLE_ENDIAN|ENC_UTF_8);
     return len + strlen;
@@ -470,7 +466,7 @@ static guint
 dissect_respond_confirmation(tvbuff_t *tvb, packet_info *pinfo _U_,
                 proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
 
     // Describe in info column which message was confirmed (or not)
     col_clear(pinfo->cinfo, COL_INFO);
@@ -485,7 +481,7 @@ static guint
 dissect_watch_id_response(tvbuff_t *tvb, packet_info *pinfo _U_,
                                proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_watch_id(tvb, offset, tree);
     return offset;
 }
@@ -494,7 +490,7 @@ static guint
 dissect_device_version_request(tvbuff_t *tvb, packet_info *pinfo _U_,
                                proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_version_type(tvb, offset, tree);
     return offset;
 }
@@ -503,7 +499,7 @@ static guint
 dissect_device_version_response(tvbuff_t *tvb, packet_info *pinfo _U_,
                                proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_version_type(tvb, offset, tree);
     offset += dissect_version_info(tvb, offset, tree);
     return offset;
@@ -513,7 +509,7 @@ static guint
 dissect_battery_power_response(tvbuff_t *tvb, packet_info *pinfo _U_,
                        proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_battery_power_level(tvb, offset, tree);
     return offset;
 }
@@ -522,7 +518,7 @@ static guint
 dissect_date_time_send(tvbuff_t *tvb, packet_info *pinfo _U_,
                        proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_datetime_year(tvb, offset, tree);
     offset += dissect_datetime_month(tvb, offset, tree);
     offset += dissect_datetime_day(tvb, offset, tree);
@@ -541,7 +537,7 @@ static guint
 dissect_available_data_response(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_available_steps(tvb, offset, tree);
     offset += dissect_available_sleep(tvb, offset, tree);
     offset += dissect_available_heart_rate(tvb, offset, tree);
@@ -555,7 +551,7 @@ static guint
 dissect_get_step_count_response(tvbuff_t *tvb, packet_info *pinfo _U_,
                                 proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_packet_number(tvb, offset, tree);
     offset += dissect_timestamp(tvb, offset, tree);
     offset += dissect_steps(tvb, offset, tree);
@@ -582,7 +578,7 @@ static guint
 dissect_push_calendar_day_send(tvbuff_t *tvb, packet_info *pinfo _U_,
                                proto_tree *tree, void *data _U_)
 {
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_calendar_event_type(tvb, offset, tree);
     offset += dissect_calendar_event_year(tvb, offset, tree);
     offset += dissect_calendar_event_month(tvb, offset, tree);
@@ -609,8 +605,8 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
 
     guint pdu_type = 0;
     guint action = 0;
-    gint payload_len = 0;
-    gint offset = 0;
+    guint payload_len = 0;
+    guint offset = 0;
 
     offset += dissect_preamble(tvb, offset, zetime_tree);
     offset += dissect_pdu_type_ex(tvb, offset, zetime_tree, ti, pinfo, &pdu_type);
@@ -618,10 +614,10 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
     offset += dissect_payload_length(tvb, offset, zetime_tree, &payload_len);
 
     const gboolean fragmented = tvb_captured_length_remaining(tvb, offset)
-                              < payload_len + ZETIME_CMD_END_LEN;
+                              < ((gint)(payload_len + ZETIME_CMD_END_LEN));
     {
         tvbuff_t *const payload_tvb = tvb_new_subset_length_caplen(tvb, offset, 
-                                      fragmented ? -1 : payload_len, payload_len);
+                                      fragmented ? -1 : ((gint)payload_len), payload_len);
         switch (pdu_type) {
         case ZETIME_PDU_TYPE_RESPOND:
             switch (action) {
@@ -786,7 +782,7 @@ dissect_zetime_ack(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     col_add_fstr(pinfo->cinfo, COL_INFO, "%s", "Ack");
     proto_item_append_text(ti, ", %s", "Ack");
 
-    gint offset = 0;
+    guint offset = 0;
     offset += dissect_ack(tvb, offset, tree);
     return offset;
 }
@@ -1180,7 +1176,7 @@ proto_reg_handoff_zetime(void)
 
         { NULL, NULL, NULL } /* end of list */
     };
-    for (gint i = 0; uuid_dissectors[i].uuid; ++i) {
+    for (guint i = 0; uuid_dissectors[i].uuid; ++i) {
         wmem_tree_insert_string(bluetooth_uuids, uuid_dissectors[i].uuid,
                                 uuid_dissectors[i].short_name, 0);
 
