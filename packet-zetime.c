@@ -35,6 +35,7 @@ static int hf_zetime_watch_id = -1;
 static int hf_zetime_version_type = -1;
 static int hf_zetime_version_info = -1;
 static int hf_zetime_battery_power_level = -1;
+static int hf_zetime_language = -1;
 static int hf_zetime_packet_number = -1;
 static int hf_zetime_timestamp = -1;
 static int hf_zetime_steps = -1;
@@ -70,6 +71,7 @@ static int hf_zetime_calendar_event_title = -1;
     XXX(ZETIME_PDU_TYPE_DEVICE_VERSION, 0x03, "Device Version") \
     XXX(ZETIME_PDU_TYPE_DATE_TIME, 0x04, "Time Synchronization") \
     XXX(ZETIME_PDU_TYPE_BATTERY_POWER, 0x08, "Battery Power") \
+    XXX(ZETIME_PDU_TYPE_LANGUAGE_SETTINGS, 0x0b, "Language Settings") \
     XXX(ZETIME_PDU_TYPE_AVAILABLE_DATA, 0x52, "Available Data") \
     XXX(ZETIME_PDU_TYPE_DELETE_STEP_COUNT, 0x53, "Step Count Deletion") \
     XXX(ZETIME_PDU_TYPE_GET_STEP_COUNT, 0x54, "Step Count") \
@@ -103,6 +105,27 @@ VALUE_STRING_ARRAY(zetime_version_type);
 
 VALUE_STRING_ENUM(zetime_error_code);
 VALUE_STRING_ARRAY(zetime_error_code);
+
+#define zetime_language_VALUE_STRING_LIST(XXX)    \
+    XXX(ZETIME_LANGUAGE_EN,      0, "EN") \
+    XXX(ZETIME_LANGUAGE_ZH,      1, "ZH") \
+    XXX(ZETIME_LANGUAGE_TWHKMO,  2, "TW/HK/MO") \
+    XXX(ZETIME_LANGUAGE_KO,      3, "KO") \
+    XXX(ZETIME_LANGUAGE_TH,      4, "TH") \
+    XXX(ZETIME_LANGUAGE_JA,      5, "JA") \
+    XXX(ZETIME_LANGUAGE_FR,      6, "FR") \
+    XXX(ZETIME_LANGUAGE_ES,      7, "ES") \
+    XXX(ZETIME_LANGUAGE_DE,      8, "DE") \
+    XXX(ZETIME_LANGUAGE_IT,      9, "IT") \
+    XXX(ZETIME_LANGUAGE_PL,     10, "PL") \
+    XXX(ZETIME_LANGUAGE_PT,     11, "PT") \
+    XXX(ZETIME_LANGUAGE_RU,     12, "RU") \
+    XXX(ZETIME_LANGUAGE_NL,     13, "NL") \
+    XXX(ZETIME_LANGUAGE_RO,     32, "RO") \
+    XXX(ZETIME_LANGUAGE_HU,     33, "HU") \
+
+VALUE_STRING_ENUM(zetime_language);
+VALUE_STRING_ARRAY(zetime_language);
 
 /* ZeTime App btsnoop:
  * push calendar day with payload = 0x04000000000000000000
@@ -239,6 +262,14 @@ dissect_battery_power_level(tvbuff_t *tvb, guint offset, proto_tree *tree)
     guint level = 0;
     proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_battery_power_level, tvb, offset, len, ENC_LITTLE_ENDIAN, &level);
     proto_item_append_text(ti, " (%s)", (level <= levelLow ? "low" : "normal"));
+    return len;
+}
+
+static guint
+dissect_language(tvbuff_t *tvb, guint offset, proto_tree *tree)
+{
+    const guint len = 1;
+    proto_tree_add_item(tree, hf_zetime_language, tvb, offset, len, ENC_LITTLE_ENDIAN);
     return len;
 }
 
@@ -515,6 +546,15 @@ dissect_battery_power_response(tvbuff_t *tvb, packet_info *pinfo _U_,
 }
 
 static guint
+dissect_language_settings_send(tvbuff_t *tvb, packet_info *pinfo _U_,
+                               proto_tree *tree, void *data _U_)
+{
+    guint offset = 0;
+    offset += dissect_language(tvb, offset, tree);
+    return offset;
+}
+
+static guint
 dissect_date_time_send(tvbuff_t *tvb, packet_info *pinfo _U_,
                        proto_tree *tree, void *data _U_)
 {
@@ -678,6 +718,18 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
             case ZETIME_ACTION_RESPONSE:
                 offset += dissect_battery_power_response(payload_tvb, pinfo, zetime_tree, data);
                 break;
+            default:
+                // unkown action
+                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            }
+            break;
+        case ZETIME_PDU_TYPE_LANGUAGE_SETTINGS:
+            switch (action) {
+            case ZETIME_ACTION_SEND:
+                offset += dissect_language_settings_send(payload_tvb, pinfo, zetime_tree, data);
+                break;
+            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
             default:
                 // unkown action
                 offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
@@ -967,6 +1019,12 @@ proto_register_zetime(void)
             { "Level", "zetime.battery_power.level",
             FT_UINT8, BASE_DEC|BASE_UNIT_STRING,
             &units_percent, 0x0,
+            NULL, HFILL }
+        },
+        { &hf_zetime_language,
+            { "Language", "zetime.language",
+            FT_UINT8, BASE_DEC,
+            VALS(zetime_language), 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_packet_number,
