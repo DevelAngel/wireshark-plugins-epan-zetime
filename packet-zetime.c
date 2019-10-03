@@ -14,12 +14,17 @@
 #include "config.h"
 
 #include <epan/packet.h>
+#include <epan/expert.h>
 #include <epan/unit_strings.h>
 #include <epan/dissectors/packet-bluetooth.h>
 
 static int proto_zetime = -1;
 
 static gint ett_zetime = -1;
+
+static expert_field ei_zetime_preamble_mismatch = EI_INIT;
+static expert_field ei_zetime_end_mismatch = EI_INIT;
+static expert_field ei_zetime_ack_mismatch = EI_INIT;
 
 static int hf_zetime_preamble = -1;
 static int hf_zetime_pdu_type = -1;
@@ -141,30 +146,46 @@ VALUE_STRING_ENUM(zetime_calendar_event_type);
 VALUE_STRING_ARRAY(zetime_calendar_event_type);
 
 static guint
-dissect_preamble(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree)
+dissect_preamble_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
+                    packet_info *pinfo)
 {
     const guint len = 1;
-    proto_tree_add_item(zetime_tree, hf_zetime_preamble, tvb, offset, len,
-                        ENC_NA);
+    guint value = 0;
+    proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_preamble,
+                tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
+    if (value != 0x6f) {
+        expert_add_info(pinfo, ti, &ei_zetime_preamble_mismatch);
+    }
     return len;
 }
 
-#define ZETIME_CMD_END_LEN ((guint) 1)
+#define ZETIME_END_LEN ((guint) 1)
 
 static guint
-dissect_end(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree)
+dissect_end_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
+               packet_info *pinfo)
 {
-    proto_tree_add_item(zetime_tree, hf_zetime_end, tvb, offset,
-                        ZETIME_CMD_END_LEN, ENC_NA);
-    return ZETIME_CMD_END_LEN;
+    const guint len = ZETIME_END_LEN;
+    guint value = 0;
+    proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_end,
+                tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
+    if (value != 0x8f) {
+        expert_add_info(pinfo, ti, &ei_zetime_end_mismatch);
+    }
+    return len;
 }
 
 static guint
-dissect_ack(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree)
+dissect_ack_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
+               packet_info *pinfo)
 {
     const guint len = 1;
-    proto_tree_add_item(zetime_tree, hf_zetime_ack, tvb, offset,
-                        len, ENC_NA);
+    guint value = 0;
+    proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_ack,
+                tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
+    if (value != 0x03) {
+        expert_add_info(pinfo, ti, &ei_zetime_ack_mismatch);
+    }
     return len;
 }
 
@@ -655,13 +676,14 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
     guint payload_len = 0;
     guint offset = 0;
 
-    offset += dissect_preamble(tvb, offset, zetime_tree);
+    offset += dissect_preamble_ex(tvb, offset, zetime_tree, pinfo);
     offset += dissect_pdu_type_ex(tvb, offset, zetime_tree, ti, pinfo, &pdu_type);
     offset += dissect_action(tvb, offset, zetime_tree, ti, pinfo, &action);
     offset += dissect_payload_length(tvb, offset, zetime_tree, &payload_len);
 
+    const guint end_len = ZETIME_END_LEN;
     const gboolean fragmented = tvb_captured_length_remaining(tvb, offset)
-                              < ((gint)(payload_len + ZETIME_CMD_END_LEN));
+                              < ((gint)(payload_len + end_len));
     {
         tvbuff_t *const payload_tvb = tvb_new_subset_length_caplen(tvb, offset, 
                                       fragmented ? -1 : ((gint)payload_len), payload_len);
@@ -828,7 +850,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
     }
 
     if (!fragmented) {
-        offset += dissect_end(tvb, offset, zetime_tree);
+        offset += dissect_end_ex(tvb, offset, zetime_tree, pinfo);
     }
 
     return offset;
@@ -842,7 +864,7 @@ dissect_zetime_ack(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
     proto_item_append_text(ti, ", %s", "Ack");
 
     guint offset = 0;
-    offset += dissect_ack(tvb, offset, tree);
+    offset += dissect_ack_ex(tvb, offset, tree, pinfo);
     return offset;
 }
 
@@ -951,8 +973,8 @@ proto_register_zetime(void)
 {
     static hf_register_info hf[] = {
         { &hf_zetime_preamble,
-            { "PREAMBLE", "zetime.preamble",
-            FT_NONE, BASE_NONE,
+            { "Preamble", "zetime.preamble",
+            FT_UINT8, BASE_HEX,
             NULL, 0x0,
             NULL, HFILL }
         },
@@ -987,14 +1009,14 @@ proto_register_zetime(void)
             NULL, HFILL }
         },
         { &hf_zetime_end,
-            { "END", "zetime.end",
-            FT_NONE, BASE_NONE,
+            { "End", "zetime.end",
+            FT_UINT8, BASE_HEX,
             NULL, 0x0,
             NULL, HFILL }
         },
         { &hf_zetime_ack,
-            { "ACK", "zetime.ack",
-            FT_NONE, BASE_NONE,
+            { "Ack", "zetime.ack",
+            FT_UINT8, BASE_HEX,
             NULL, 0x0,
             NULL, HFILL }
         },
@@ -1191,6 +1213,25 @@ proto_register_zetime(void)
         &ett_zetime
     };
 
+    /* Setup protocol expert items */
+    static ei_register_info ei[] = {
+        { &ei_zetime_preamble_mismatch,
+            { "zetime.preamble.mismatch",
+            PI_MALFORMED, PI_ERROR,
+            "preamble is not 0x6f", EXPFILL }
+        },
+        { &ei_zetime_end_mismatch,
+            { "zetime.end.mismatch",
+            PI_MALFORMED, PI_ERROR,
+            "end is not 0x8f", EXPFILL }
+        },
+        { &ei_zetime_ack_mismatch,
+            { "zetime.ack.mismatch",
+            PI_MALFORMED, PI_ERROR,
+            "ack is not 0x03", EXPFILL }
+        },
+    };
+
     proto_zetime = proto_register_protocol (
         "ZeTime Protocol", /* name */
         "ZeTime",          /* short name */
@@ -1199,6 +1240,10 @@ proto_register_zetime(void)
 
     proto_register_field_array(proto_zetime, hf, array_length(hf));
     proto_register_subtree_array(ett, array_length(ett));
+
+    /* Required function calls to register expert items */
+    expert_module_t *const expert_zetime = expert_register_protocol(proto_zetime);
+    expert_register_field_array(expert_zetime, ei, array_length(ei));
 }
 
 void
