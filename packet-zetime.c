@@ -475,13 +475,20 @@ dissect_calendar_event_title(tvbuff_t *tvb, guint offset, proto_tree *tree)
 }
 
 static guint
-dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo,
+dissect_payload_unknown(tvbuff_t *tvb, packet_info *pinfo _U_,
+                        proto_tree *tree, void *data _U_)
+{
+    proto_tree_add_item(tree, hf_zetime_payload_unkown, tvb, 0, -1, ENC_NA);
+    return tvb_captured_length(tvb);
+}
+
+static guint
+dissect_payload_unknown_ex(tvbuff_t *tvb, packet_info *pinfo,
                         proto_tree *tree, void *data _U_)
 {
     col_append_str(pinfo->cinfo, COL_INFO, " [UNKNOWN PAYLOAD]");
 
-    proto_tree_add_item(tree, hf_zetime_payload_unkown, tvb, 0, -1, ENC_NA);
-    return tvb_captured_length(tvb);
+    return dissect_payload_unknown(tvb, pinfo, tree, data);
 }
 
 static guint
@@ -666,7 +673,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -680,7 +687,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -694,7 +701,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -706,7 +713,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
             case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -720,7 +727,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -732,7 +739,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
             case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -746,7 +753,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -758,7 +765,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
             case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -772,7 +779,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -784,7 +791,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
             case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -798,7 +805,7 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
                 break;
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
@@ -810,12 +817,12 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
             case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
             default:
                 // unkown action
-                offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
                 break;
             }
             break;
         default:
-            offset += dissect_payload_unknown(payload_tvb, pinfo, zetime_tree, data);
+            offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
             break;
         }
     }
