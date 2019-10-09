@@ -15,12 +15,17 @@
 
 #include <epan/packet.h>
 #include <epan/expert.h>
+#include <epan/reassemble.h>
 #include <epan/unit_strings.h>
 #include <epan/dissectors/packet-bluetooth.h>
+
+#include <assert.h>
 
 static int proto_zetime = -1;
 
 static gint ett_zetime = -1;
+static gint ett_zetime_msg_fragment = -1;
+static gint ett_zetime_msg_fragments = -1;
 
 static expert_field ei_zetime_preamble_mismatch = EI_INIT;
 static expert_field ei_zetime_end_mismatch = EI_INIT;
@@ -69,6 +74,42 @@ static int hf_zetime_calendar_event_day = -1;
 static int hf_zetime_calendar_event_hour = -1;
 static int hf_zetime_calendar_event_minute = -1;
 static int hf_zetime_calendar_event_title = -1;
+
+static int hf_zetime_msg_fragments = -1;
+static int hf_zetime_msg_fragment = -1;
+static int hf_zetime_msg_fragment_overlap = -1;
+static int hf_zetime_msg_fragment_overlap_conflicts = -1;
+static int hf_zetime_msg_fragment_multiple_tails = -1;
+static int hf_zetime_msg_fragment_too_long_fragment = -1;
+static int hf_zetime_msg_fragment_error = -1;
+static int hf_zetime_msg_fragment_count = -1;
+static int hf_zetime_msg_reassembled_in = -1;
+static int hf_zetime_msg_reassembled_length = -1;
+static int hf_zetime_msg_reassembled_data = -1;
+
+static const fragment_items zetime_msg_frag_items = {
+    /* Fragment subtrees */
+    &ett_zetime_msg_fragment,
+    &ett_zetime_msg_fragments,
+
+    /* Fragment fields */
+    &hf_zetime_msg_fragments,
+    &hf_zetime_msg_fragment,
+    &hf_zetime_msg_fragment_overlap,
+    &hf_zetime_msg_fragment_overlap_conflicts,
+    &hf_zetime_msg_fragment_multiple_tails,
+    &hf_zetime_msg_fragment_too_long_fragment,
+    &hf_zetime_msg_fragment_error,
+    &hf_zetime_msg_fragment_count,
+    &hf_zetime_msg_reassembled_in,
+    &hf_zetime_msg_reassembled_length,
+    &hf_zetime_msg_reassembled_data,
+
+    /* Tag */
+    "Message fragments"
+};
+
+static reassembly_table zetime_msg_reassembly_table;
 
 #define zetime_pdu_type_VALUE_STRING_LIST(XXX)    \
     XXX(ZETIME_PDU_TYPE_RESPOND, 0x01, "Respond") \
@@ -672,9 +713,456 @@ dissect_push_calendar_day_send(tvbuff_t *tvb, packet_info *pinfo _U_,
     return offset;
 }
 
-static int
-dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
+static gboolean
+has_zetime_msg_header(tvbuff_t *tvb)
+{
+    const guint tvb_len = tvb_captured_length(tvb);
+    const guint header_len = ZETIME_MSG_HEADER_LEN;
+    if (tvb_len < header_len) {
+        // packet has not enough data for the message header
+        return FALSE;
+    }
+
+    // check preamble value
+    {
+        const guint value = tvb_get_guint8(tvb, 0);
+        if (value != ZETIME_FIELD_VALUE_PREAMBLE) {
+            // preamble field in header has not the correct value
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+static gboolean
+has_zetime_msg_nofragmentation(tvbuff_t *tvb)
+{
+    const guint tvb_len = tvb_captured_length(tvb);
+    if (!has_zetime_msg_header(tvb)) {
+        return FALSE;
+    }
+
+    // check end value
+    {
+        assert(tvb_len >= 1);
+        const guint value = tvb_get_guint8(tvb, tvb_len - 1);
+        if (value != ZETIME_FIELD_VALUE_END) {
+            // end field in footer has not the correct value
+            return FALSE;
+        }
+    }
+
+    // check packet len
+    {
+        const guint header_len = ZETIME_MSG_HEADER_LEN;
+        const guint footer_len = ZETIME_MSG_FOOTER_LEN;
+        const guint offset = ZETIME_FIELD_LEN_PREAMBLE
+                           + ZETIME_FIELD_LEN_PDU_TYPE
+                           + ZETIME_FIELD_LEN_ACTION;
+        const guint payload_len = tvb_get_letohs(tvb, offset); // 16bit unsigned
+        if (tvb_len != header_len + payload_len + footer_len) {
+            // packet has not the correct length
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+static guint
+dissect_zetime_msg_header(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+                   proto_item *ti,
+                   guint *pdu_type, guint *action, guint *payload_len)
+{
+    guint offset = 0;
+    offset += dissect_preamble_ex(tvb, offset, tree, pinfo);
+    offset += dissect_pdu_type_ex(tvb, offset, tree, ti, pinfo, pdu_type);
+    offset += dissect_action(tvb, offset, tree, ti, pinfo, action);
+    offset += dissect_payload_length(tvb, offset, tree, payload_len);
+    return offset;
+}
+
+static guint
+dissect_zetime_msg_footer(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree)
+{
+    guint offset = 0;
+    offset += dissect_end_ex(tvb, offset, tree, pinfo);
+    return offset;
+}
+
+static guint
+dissect_zetime_msg_payload(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
+                   proto_item *ti _U_, void *data _U_,
+                   guint pdu_type, guint action)
+{
+    guint offset = 0;
+    switch (pdu_type) {
+    case ZETIME_PDU_TYPE_RESPOND:
+        switch (action) {
+        case ZETIME_ACTION_CONFIRMATION:
+            offset += dissect_respond_confirmation(tvb, pinfo, tree, data);
+            break;
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_WATCH_ID:
+        switch (action) {
+        case ZETIME_ACTION_REQUEST:
+            offset += dissect_payload_zeros(tvb, pinfo, tree, data, 1);
+            break;
+        case ZETIME_ACTION_RESPONSE:
+            offset += dissect_watch_id_response(tvb, pinfo, tree, data);
+            break;
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_DEVICE_VERSION:
+        switch (action) {
+        case ZETIME_ACTION_REQUEST:
+            offset += dissect_device_version_request(tvb, pinfo, tree, data);
+            break;
+        case ZETIME_ACTION_RESPONSE:
+            offset += dissect_device_version_response(tvb, pinfo, tree, data);
+            break;
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_DATE_TIME:
+        switch (action) {
+        case ZETIME_ACTION_SEND:
+            offset += dissect_date_time_send(tvb, pinfo, tree, data);
+            break;
+        case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_BATTERY_POWER:
+        switch (action) {
+        case ZETIME_ACTION_REQUEST:
+            offset += dissect_payload_zeros(tvb, pinfo, tree, data, 1);
+            break;
+        case ZETIME_ACTION_RESPONSE:
+            offset += dissect_battery_power_response(tvb, pinfo, tree, data);
+            break;
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_LANGUAGE_SETTINGS:
+        switch (action) {
+        case ZETIME_ACTION_SEND:
+            offset += dissect_language_settings_send(tvb, pinfo, tree, data);
+            break;
+        case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_AVAILABLE_DATA:
+        switch (action) {
+        case ZETIME_ACTION_REQUEST:
+            offset += dissect_payload_zeros(tvb, pinfo, tree, data, 1);
+            break;
+        case ZETIME_ACTION_RESPONSE:
+            offset += dissect_available_data_response(tvb, pinfo, tree, data);
+            break;
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_DELETE_STEP_COUNT:
+        switch (action) {
+        case ZETIME_ACTION_SEND:
+            offset += dissect_payload_zeros(tvb, pinfo, tree, data, 1);
+            break;
+        case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_GET_STEP_COUNT:
+        switch (action) {
+        case ZETIME_ACTION_REQUEST:
+            offset += dissect_payload_zeros(tvb, pinfo, tree, data, 2);
+            break;
+        case ZETIME_ACTION_RESPONSE:
+            offset += dissect_get_step_count_response(tvb, pinfo, tree, data);
+            break;
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_DELETE_HEARTRATE_DATA:
+        switch (action) {
+        case ZETIME_ACTION_SEND:
+            offset += dissect_payload_zeros(tvb, pinfo, tree, data, 1);
+            break;
+        case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA:
+        switch (action) {
+        case ZETIME_ACTION_REQUEST:
+            offset += dissect_payload_zeros(tvb, pinfo, tree, data, 1);
+            break;
+        case ZETIME_ACTION_RESPONSE:
+            offset += dissect_get_heartrate_exdata_response(tvb, pinfo, tree, data);
+            break;
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    case ZETIME_PDU_TYPE_PUSH_CALENDAR_DAY:
+        switch (action) {
+        case ZETIME_ACTION_SEND:
+            offset += dissect_push_calendar_day_send(tvb, pinfo, tree, data);
+            break;
+        case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
+        default:
+            // unkown action
+            offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+            break;
+        }
+        break;
+    default:
+        offset += dissect_payload_unknown_ex(tvb, pinfo, tree, data);
+        break;
+    }
+    return offset;
+}
+
+static guint
+dissect_zetime_msg_complete(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                    proto_item *ti, void *data _U_)
+{
+    const guint header_len = ZETIME_MSG_HEADER_LEN;
+    const guint footer_len = ZETIME_MSG_FOOTER_LEN;
+
+    guint offset = 0;
+    guint pdu_type = 0;
+    guint action = 0;
+    guint payload_len = 0;
+
+    tvbuff_t *header_tvb = tvb_new_subset_length(tvb, offset, header_len);
+    offset += dissect_zetime_msg_header(header_tvb, pinfo, tree, ti,
+                    &pdu_type, &action, &payload_len);
+
+    tvbuff_t *payload_tvb = tvb_new_subset_length(tvb, offset, payload_len);
+    offset += dissect_zetime_msg_payload(payload_tvb, pinfo, tree, ti, data,
+                    pdu_type, action);
+
+    tvbuff_t *footer_tvb = tvb_new_subset_length(tvb, offset, footer_len);
+    offset += dissect_zetime_msg_footer(footer_tvb, pinfo, tree);
+
+    return offset;
+}
+
+static guint
+dissect_zetime_msg_incomplete(tvbuff_t *tvb, packet_info *pinfo)
+{
+    switch (pinfo->p2p_dir) {
+        case P2P_DIR_SENT:
+            col_add_str(pinfo->cinfo, COL_INFO, "Sent fragment");
+            break;
+        case P2P_DIR_RECV:
+            col_add_str(pinfo->cinfo, COL_INFO, "Rcvd fragment");
+            break;
+        default:
+            col_add_str(pinfo->cinfo, COL_INFO, "Fragment with unknown direction");
+            break;
+    }
+
+    return tvb_captured_length(tvb);
+}
+
+static guint
+get_zetime_frag_id(packet_info *pinfo)
+{
+    return pinfo->p2p_dir;
+}
+
+static gboolean
+find_zetime_reassembled_msg(tvbuff_t **new_tvb, tvbuff_t *tvb,
+                packet_info *pinfo, proto_tree *tree)
+{
+    const guint frag_id = get_zetime_frag_id(pinfo);
+    fragment_head *frag_msg = NULL;
+    frag_msg = fragment_get_reassembled_id(&zetime_msg_reassembly_table,
+                                           pinfo, frag_id);
+    if (frag_msg) {
+        // msg was already completely reassembled
+        assert(new_tvb);
+        *new_tvb = process_reassembled_data(tvb, 0, pinfo,
+                        "Reassembled ZeTime packet", frag_msg,
+                        &zetime_msg_frag_items, /*update_col_infop*/ NULL,
+                        tree);
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
+add_zetime_msg_fragment_first(tvbuff_t **new_tvb, tvbuff_t *tvb,
+                packet_info *pinfo, proto_tree *tree, void *data)
+{
+    if (!has_zetime_msg_header(tvb)) {
+        // incomplete or invalid header
+        return FALSE;
+    }
+
+    guint payload_len = 0;
+    guint offset = dissect_zetime_msg_header(tvb, pinfo, tree, NULL,
+                    NULL, NULL, &payload_len);
+
+    const guint footer_len = ZETIME_MSG_FOOTER_LEN;
+    const gboolean fragmented = tvb_captured_length_remaining(tvb, offset)
+                              < ((gint)(payload_len + footer_len));
+    if (fragmented) {
+        const guint frag_id = get_zetime_frag_id(pinfo);
+        const guint tot_len = offset + payload_len + footer_len;
+        fragment_head *frag_msg = NULL;
+        frag_msg = fragment_add_check(&zetime_msg_reassembly_table,
+                            tvb, 0,
+                            pinfo, frag_id, data,
+                            0, tvb_captured_length(tvb),
+                            TRUE);
+        fragment_set_tot_len(&zetime_msg_reassembly_table,
+                             pinfo, frag_id, data,
+                             tot_len);
+        assert(new_tvb);
+        *new_tvb = process_reassembled_data(tvb, 0, pinfo,
+                        "Reassembled ZeTime packet", frag_msg,
+                        &zetime_msg_frag_items, /*update_col_infop*/ NULL,
+                        tree);
+        pinfo->fragmented = TRUE;
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
+static gboolean
+add_zetime_msg_fragment_next(tvbuff_t **new_tvb, tvbuff_t *tvb,
+                packet_info *pinfo, proto_tree *tree, void *data, gboolean *more_fragsRet)
+{
+    const guint frag_id = get_zetime_frag_id(pinfo);
+    fragment_head *frag_msg = NULL;
+    frag_msg = fragment_get(&zetime_msg_reassembly_table, pinfo, frag_id, data);
+    if (!frag_msg) {
+        // no reassembling running
+        return FALSE;
+    }
+
+    // reassembling is running -> find last fragment
+    for (; frag_msg->next; frag_msg = frag_msg->next);
+    const guint frag_offset = frag_msg->offset + frag_msg->len;
+    const guint frag_len = tvb_captured_length(tvb);
+    const guint tot_len = fragment_get_tot_len(&zetime_msg_reassembly_table,
+                        pinfo, frag_id, data);
+    if (frag_offset + frag_len > tot_len) {
+        /* Fragmentation cannot be completed for previous packets
+         * because at least one packet is missing or has wrong length.
+         * But without unique frag_id, they will be added to the next
+         * fragmented message, hopefully starting with this packet.
+         */
+        return FALSE;
+    }
+
+    const gboolean more_frags = (frag_offset + frag_len < tot_len) ? TRUE
+                                                                   : FALSE;
+    frag_msg = fragment_add_check(&zetime_msg_reassembly_table,
+                        tvb, 0,
+                        pinfo, frag_id, data,
+                        frag_offset, frag_len,
+                        more_frags);
+    assert(new_tvb);
+    *new_tvb = process_reassembled_data(tvb, 0, pinfo,
+                    "Reassembled ZeTime packet", frag_msg,
+                    &zetime_msg_frag_items, /*update_col_infop*/ NULL,
+                    tree);
+    pinfo->fragmented = TRUE;
+    if (more_fragsRet) {
+        *more_fragsRet = more_frags;
+    }
+    return TRUE;
+}
+
+static tvbuff_t *
+reassemble_zetime_msg(tvbuff_t *const tvb, packet_info *pinfo, proto_tree *tree,
+                      void *data)
+{
+    /* Fragmented message composition
+     *
+     * +----------+----------+----------+----------------+----------+ packet
+     * | PREAMBLE | PDU TYPE |  ACTION  | payload length | payload  | 1
+     * |  1 Byte  |  1 Byte  |  1 Byte  |    2 Bytes     | X Bytes  |
+     * |  fixed   |   enum   |   enum   |    number      | variable |
+     * +----------+----------+----------+----------------+----------+
+     * +------------------------------------------------------------+ packet
+     * |                        payload                             | 2..(n-1)
+     * |                        X Bytes                             |
+     * |                        variable                            |
+     * +------------------------------------------------------------+
+     * +----------+-------+ packet
+     * | payload  |  END  | n
+     * |  X Bytes |  1 B  |
+     * | variable | fixed |
+     * +----------+-------+
+     *
+     */
+    if (tvb_captured_length(tvb) != tvb_reported_length(tvb)) {
+        return NULL;
+    }
+
+    gboolean more_frags = FALSE;
+    tvbuff_t *new_tvb = NULL;
+    if (has_zetime_msg_nofragmentation(tvb)) {
+        // no reassembling needed
+        new_tvb = tvb;
+    } else if (find_zetime_reassembled_msg(&new_tvb, tvb, pinfo, tree)) {
+    } else if (add_zetime_msg_fragment_next(&new_tvb, tvb, pinfo, tree, data, &more_frags)) {
+    } else if (add_zetime_msg_fragment_first(&new_tvb, tvb, pinfo, tree, data)) {
+    } else {
+        // fallback: no reassembling possible -> misformed packet?
+        new_tvb = tvb;
+    }
+
+    return new_tvb;
+}
+
+static int
+dissect_zetime_msg(tvbuff_t *const tvb, packet_info *pinfo, proto_tree *tree,
+                   proto_item *ti, void *data)
 {
     /* General message composition
      *
@@ -686,189 +1174,9 @@ dissect_zetime_msg(tvbuff_t *tvb, packet_info *pinfo, proto_tree *zetime_tree,
      *
      */
 
-    guint pdu_type = 0;
-    guint action = 0;
-    guint payload_len = 0;
-    guint offset = 0;
-
-    offset += dissect_preamble_ex(tvb, offset, zetime_tree, pinfo);
-    offset += dissect_pdu_type_ex(tvb, offset, zetime_tree, ti, pinfo, &pdu_type);
-    offset += dissect_action(tvb, offset, zetime_tree, ti, pinfo, &action);
-    offset += dissect_payload_length(tvb, offset, zetime_tree, &payload_len);
-
-    const guint end_len = ZETIME_END_LEN;
-    const gboolean fragmented = tvb_captured_length_remaining(tvb, offset)
-                              < ((gint)(payload_len + end_len));
-    {
-        tvbuff_t *const payload_tvb = tvb_new_subset_length_caplen(tvb, offset, 
-                                      fragmented ? -1 : ((gint)payload_len), payload_len);
-        switch (pdu_type) {
-        case ZETIME_PDU_TYPE_RESPOND:
-            switch (action) {
-            case ZETIME_ACTION_CONFIRMATION:
-                offset += dissect_respond_confirmation(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_WATCH_ID:
-            switch (action) {
-            case ZETIME_ACTION_REQUEST:
-                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
-                break;
-            case ZETIME_ACTION_RESPONSE:
-                offset += dissect_watch_id_response(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_DEVICE_VERSION:
-            switch (action) {
-            case ZETIME_ACTION_REQUEST:
-                offset += dissect_device_version_request(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            case ZETIME_ACTION_RESPONSE:
-                offset += dissect_device_version_response(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_DATE_TIME:
-            switch (action) {
-            case ZETIME_ACTION_SEND:
-                offset += dissect_date_time_send(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_BATTERY_POWER:
-            switch (action) {
-            case ZETIME_ACTION_REQUEST:
-                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
-                break;
-            case ZETIME_ACTION_RESPONSE:
-                offset += dissect_battery_power_response(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_LANGUAGE_SETTINGS:
-            switch (action) {
-            case ZETIME_ACTION_SEND:
-                offset += dissect_language_settings_send(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_AVAILABLE_DATA:
-            switch (action) {
-            case ZETIME_ACTION_REQUEST:
-                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
-                break;
-            case ZETIME_ACTION_RESPONSE:
-                offset += dissect_available_data_response(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_DELETE_STEP_COUNT:
-            switch (action) {
-            case ZETIME_ACTION_SEND:
-                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
-                break;
-            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_GET_STEP_COUNT:
-            switch (action) {
-            case ZETIME_ACTION_REQUEST:
-                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 2);
-                break;
-            case ZETIME_ACTION_RESPONSE:
-                offset += dissect_get_step_count_response(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_DELETE_HEARTRATE_DATA:
-            switch (action) {
-            case ZETIME_ACTION_SEND:
-                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
-                break;
-            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_GET_HEARTRATE_EXDATA:
-            switch (action) {
-            case ZETIME_ACTION_REQUEST:
-                offset += dissect_payload_zeros(payload_tvb, pinfo, zetime_tree, data, 1);
-                break;
-            case ZETIME_ACTION_RESPONSE:
-                offset += dissect_get_heartrate_exdata_response(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        case ZETIME_PDU_TYPE_PUSH_CALENDAR_DAY:
-            switch (action) {
-            case ZETIME_ACTION_SEND:
-                offset += dissect_push_calendar_day_send(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            case ZETIME_ACTION_CONFIRMATION: // confirmation as RESPOND (0x01)
-            default:
-                // unkown action
-                offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-                break;
-            }
-            break;
-        default:
-            offset += dissect_payload_unknown_ex(payload_tvb, pinfo, zetime_tree, data);
-            break;
-        }
-    }
-
-    if (!fragmented) {
-        offset += dissect_end_ex(tvb, offset, zetime_tree, pinfo);
-    }
-
-    return offset;
+    tvbuff_t *ntvb = reassemble_zetime_msg(tvb, pinfo, tree, data);
+    return (ntvb) ? dissect_zetime_msg_complete(ntvb, pinfo, tree, ti, data)
+                  : dissect_zetime_msg_incomplete(tvb, pinfo);
 }
 
 static int
@@ -899,6 +1207,8 @@ static int
 dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                void *data)
 {
+    const gboolean save_fragmented = pinfo->fragmented;
+
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "ZeTime");
     col_clear(pinfo->cinfo, COL_INFO);
 
@@ -911,6 +1221,7 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
         offset = dissect_zetime_msg(tvb, pinfo, zetime_tree, ti, data);
     }
 
+    pinfo->fragmented = save_fragmented; // restore
     return offset;
 }
 
@@ -1236,11 +1547,80 @@ proto_register_zetime(void)
             NULL, 0x0,
             NULL, HFILL }
         },
+	{ &hf_zetime_msg_fragments,
+	    { "Message fragments", "zetime.fragments",
+	    FT_NONE, BASE_NONE,
+            NULL, 0x00, NULL, HFILL }
+        },
+	{ &hf_zetime_msg_fragment,
+	    { "Message fragment", "zetime.fragment",
+	    FT_FRAMENUM, BASE_NONE,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_fragment_overlap,
+	    { "Message fragment overlap", "zetime.fragment.overlap",
+	    FT_BOOLEAN, 0,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_fragment_overlap_conflicts,
+	    { "Message fragment overlapping with conflicting data",
+	    "zetime.fragment.overlap.conflicts",
+	    FT_BOOLEAN, 0,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_fragment_multiple_tails,
+	    { "Message has multiple tail fragments",
+	    "zetime.fragment.multiple_tails",
+	    FT_BOOLEAN, 0,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_fragment_too_long_fragment,
+	    { "Message fragment too long", "zetime.fragment.too_long_fragment",
+	    FT_BOOLEAN, 0,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_fragment_error,
+	    { "Message defragmentation error", "zetime.fragment.error",
+	    FT_FRAMENUM, BASE_NONE,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_fragment_count,
+	    { "Message fragment count", "zetime.fragment.count",
+	    FT_UINT32, BASE_DEC,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_reassembled_in,
+	    { "Reassembled in", "zetime.reassembled.in",
+	    FT_FRAMENUM, BASE_NONE,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_reassembled_length,
+	    { "Reassembled length", "zetime.reassembled.length",
+	    FT_UINT32, BASE_DEC,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
+	{ &hf_zetime_msg_reassembled_data,
+	    { "Reassembled data", "zetime.reassembled.data",
+	    FT_BYTES, BASE_NONE,
+            NULL, 0x00,
+            NULL, HFILL }
+        },
     };
 
     /* Setup protocol subtree array */
     static gint *ett[] = {
-        &ett_zetime
+        &ett_zetime,
+        &ett_zetime_msg_fragment,
+        &ett_zetime_msg_fragments,
     };
 
     /* Setup protocol expert items */
@@ -1274,6 +1654,10 @@ proto_register_zetime(void)
     /* Required function calls to register expert items */
     expert_module_t *const expert_zetime = expert_register_protocol(proto_zetime);
     expert_register_field_array(expert_zetime, ei, array_length(ei));
+
+    /* Fragments */
+    reassembly_table_register(&zetime_msg_reassembly_table,
+                              &addresses_reassembly_table_functions);
 }
 
 void
