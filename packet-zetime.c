@@ -145,11 +145,24 @@ VALUE_STRING_ARRAY(zetime_language);
 VALUE_STRING_ENUM(zetime_calendar_event_type);
 VALUE_STRING_ARRAY(zetime_calendar_event_type);
 
+#define ZETIME_FIELD_LEN_PREAMBLE       ((guint) 1)
+#define ZETIME_FIELD_LEN_END            ((guint) 1)
+#define ZETIME_FIELD_LEN_ACK            ((guint) 1)
+#define ZETIME_FIELD_LEN_PDU_TYPE       ((guint) 1)
+#define ZETIME_FIELD_LEN_ACTION         ((guint) 1)
+#define ZETIME_FIELD_LEN_PAYLOAD_LEN    ((guint) 2)
+
+#define ZETIME_MSG_HEADER_LEN \
+        (ZETIME_FIELD_LEN_PREAMBLE + ZETIME_FIELD_LEN_PDU_TYPE \
+        + ZETIME_FIELD_LEN_ACTION + ZETIME_FIELD_LEN_PAYLOAD_LEN)
+#define ZETIME_MSG_FOOTER_LEN \
+        (ZETIME_FIELD_LEN_END)
+
 static guint
 dissect_preamble_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
                     packet_info *pinfo)
 {
-    const guint len = 1;
+    const guint len = ZETIME_FIELD_LEN_PREAMBLE;
     guint value = 0;
     proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_preamble,
                 tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
@@ -159,13 +172,11 @@ dissect_preamble_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
     return len;
 }
 
-#define ZETIME_END_LEN ((guint) 1)
-
 static guint
 dissect_end_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
                packet_info *pinfo)
 {
-    const guint len = ZETIME_END_LEN;
+    const guint len = ZETIME_FIELD_LEN_END;
     guint value = 0;
     proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_end,
                 tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
@@ -179,7 +190,7 @@ static guint
 dissect_ack_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
                packet_info *pinfo)
 {
-    const guint len = 1;
+    const guint len = ZETIME_FIELD_LEN_ACK;
     guint value = 0;
     proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_ack,
                 tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
@@ -193,7 +204,7 @@ static guint
 dissect_pdu_type_ex(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree,
                     proto_item *ti, packet_info *pinfo, guint *valueRet)
 {
-    const guint len = 1;
+    const guint len = ZETIME_FIELD_LEN_PDU_TYPE;
     guint value = 0;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_pdu_type, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN, &value);
@@ -218,7 +229,7 @@ static guint
 dissect_action(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree,
                  proto_item *ti, packet_info *pinfo _U_, guint *valueRet)
 {
-    const guint len = 1;
+    const guint len = ZETIME_FIELD_LEN_ACTION;
     guint value = 0;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_action, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN, &value);
@@ -236,7 +247,7 @@ static guint
 dissect_payload_length(tvbuff_t *tvb, guint offset, proto_tree *zetime_tree,
                        guint *payload_len)
 {
-    const guint len = 2;
+    const guint len = ZETIME_FIELD_LEN_PAYLOAD_LEN;
     proto_tree_add_item_ret_uint(zetime_tree, hf_zetime_payload_length, tvb,
                                  offset, len, ENC_LITTLE_ENDIAN,
                                  payload_len);
