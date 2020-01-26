@@ -158,6 +158,10 @@ VALUE_STRING_ARRAY(zetime_calendar_event_type);
 #define ZETIME_MSG_FOOTER_LEN \
         (ZETIME_FIELD_LEN_END)
 
+#define ZETIME_FIELD_VALUE_PREAMBLE  0x6f
+#define ZETIME_FIELD_VALUE_END       0x8f
+#define ZETIME_FIELD_VALUE_ACK       0x03
+
 static guint
 dissect_preamble_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
                     packet_info *pinfo)
@@ -166,7 +170,7 @@ dissect_preamble_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
     guint value = 0;
     proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_preamble,
                 tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
-    if (value != 0x6f) {
+    if (value != ZETIME_FIELD_VALUE_PREAMBLE) {
         expert_add_info(pinfo, ti, &ei_zetime_preamble_mismatch);
     }
     return len;
@@ -180,7 +184,7 @@ dissect_end_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
     guint value = 0;
     proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_end,
                 tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
-    if (value != 0x8f) {
+    if (value != ZETIME_FIELD_VALUE_END) {
         expert_add_info(pinfo, ti, &ei_zetime_end_mismatch);
     }
     return len;
@@ -194,7 +198,7 @@ dissect_ack_ex(tvbuff_t *tvb, guint offset, proto_tree *tree,
     guint value = 0;
     proto_item *ti = proto_tree_add_item_ret_uint(tree, hf_zetime_ack,
                 tvb, offset, len, ENC_LITTLE_ENDIAN, &value);
-    if (value != 0x03) {
+    if (value != ZETIME_FIELD_VALUE_ACK) {
         expert_add_info(pinfo, ti, &ei_zetime_ack_mismatch);
     }
     return len;
