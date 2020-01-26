@@ -875,6 +875,18 @@ static int
 dissect_zetime_ack(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                    proto_item *ti, void *data _U_)
 {
+    if (1 != tvb_reported_length(tvb)) {
+        return 0;
+    }
+
+    // check ack value
+    {
+        const guint value = tvb_get_guint8(tvb, 0);
+        if (value != ZETIME_FIELD_VALUE_ACK) {
+            return 0;
+        }
+    }
+
     col_add_fstr(pinfo->cinfo, COL_INFO, "%s", "Ack");
     proto_item_append_text(ti, ", %s", "Ack");
 
@@ -894,9 +906,12 @@ dissect_zetime(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree,
                                          ENC_NA);
     proto_tree *zetime_tree = proto_item_add_subtree(ti, ett_zetime);
 
-    return (tvb_reported_length(tvb) != 1) ?
-                dissect_zetime_msg(tvb, pinfo, zetime_tree, ti, data) :
-                dissect_zetime_ack(tvb, pinfo, zetime_tree, ti, data);
+    int offset = dissect_zetime_ack(tvb, pinfo, zetime_tree, ti, data);
+    if (0 == offset) {
+        offset = dissect_zetime_msg(tvb, pinfo, zetime_tree, ti, data);
+    }
+
+    return offset;
 }
 
 static int
